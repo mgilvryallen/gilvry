@@ -627,7 +627,7 @@
             const counts = wantedCounts();
             const w = settings.wander;
             const loopTurn = n % index.bars === 0 ? 1.4 : 1;
-            const chance = { tune: 0.1 + 0.55 * w, bed: 0.03 + 0.15 * w, rhythm: 0.05 + 0.2 * w };
+            const chance = { tune: 0.18 + 0.6 * w, bed: 0.04 + 0.16 * w, rhythm: 0.08 + 0.25 * w };
             let changed = false;
 
             for (const role of ['bed', 'rhythm', 'tune']) {
@@ -663,8 +663,27 @@
                     }
                 }
             }
+            if (phrase) restSome(n, at);
             if (changed) renderNow();
             return changed;
+        }
+
+        // Now and then a layer steps back for a bar or few, almost out, then comes back in. Never
+        // the bed, never more than a third of what's playing at once.
+        function restSome(n, at) {
+            const live = voices.filter(v => !v.leaving && v.stem.role !== 'bed' && n - v.joinedBar >= PHRASE);
+            const resting = live.filter(v => v.restUntil > at).length;
+            let room = Math.floor(voices.filter(v => !v.leaving).length / 3) - resting;
+            const chance = 0.06 + 0.22 * settings.wander;
+            live.filter(v => !(v.restUntil > at)).forEach(voice => {
+                if (room <= 0 || Math.random() > chance) return;
+                const bar = clock.barTime;
+                const down = 0.12 + Math.random() * 0.25;
+                const hold = (1 + Math.floor(Math.random() * 3)) * bar;
+                shape(voice, at, [[at + bar, down], [at + bar + hold, down], [at + 2 * bar + hold, 1]]);
+                voice.restUntil = at + 2 * bar + hold;
+                room--;
+            });
         }
 
         function fadeBars(role, entering) {
@@ -673,13 +692,47 @@
             return entering ? 2 + 2 * (1 - settings.wander) : 3;
         }
 
+        // A slow wobble for one of a voice's settings: a sine at a rate of its own, so no two
+        // layers ever move together and the whole never quite repeats
+        function sway(param, center, depth, at) {
+            param.value = center;
+            const lfo = ctx.createOscillator();
+            lfo.frequency.value = 0.018 + Math.random() * 0.05;
+            const amount = ctx.createGain();
+            amount.gain.value = depth;
+            lfo.connect(amount).connect(param);
+            lfo.start(at);
+            return { lfo, rate: lfo.frequency.value, depth, center, start: at };
+        }
+
+        function valueOf(wobble, t) {
+            return wobble.center + wobble.depth * Math.sin(2 * Math.PI * wobble.rate * Math.max(0, t - wobble.start));
+        }
+
+        // Each voice: its loop -> layer (comes and goes) -> lilt (volume sway) -> tint (brightness
+        // sway) -> drift (wanders left and right) -> trim (evens out loudness) -> the mix.
+        // How far they move follows Wander; beds move least, so the floor stays steady.
         function join(stem, n, at, fadeSeconds) {
+            const w = settings.wander;
+            const bed = stem.role === 'bed';
             const layer = ctx.createGain();
+            const lilt = ctx.createGain();
+            const tint = ctx.createBiquadFilter();
+            tint.type = 'lowpass';
+            tint.Q.value = 0.4;
+            const drift = ctx.createStereoPanner();
             const trim = ctx.createGain();
             trim.gain.value = Math.pow(10, stem.gain / 20);
-            layer.connect(trim).connect(mix);
+            layer.connect(lilt).connect(tint).connect(drift).connect(trim).connect(mix);
+            const liltDepth = (bed ? 0.06 : 0.1) + 0.15 * w;
+            const motion = {
+                lilt: sway(lilt.gain, 1 - liltDepth, liltDepth, at),
+                tint: stem.role === 'rhythm' ? null : sway(tint.frequency, bed ? 3200 : 6500, bed ? 1000 + 1200 * w : 2500 + 2500 * w, at),
+                drift: sway(drift.pan, (Math.random() - 0.5) * 0.4, (bed ? 0.12 : 0.2) + 0.35 * w, at)
+            };
+            if (!motion.tint) tint.frequency.value = 20000;
             const fade = fadeSeconds ?? fadeBars(stem.role, true) * clock.barTime;
-            const voice = { stem, layer, sources: [], leaving: false, envelope: { t0: at, v0: 0, t1: at + fade, v1: 1 } };
+            const voice = { stem, layer, motion, sources: [], leaving: false, joinedBar: n, restUntil: 0, points: [[at, 0], [at + fade, 1]] };
             layer.gain.setValueAtTime(0, at);
             layer.gain.linearRampToValueAtTime(1, at + fade);
             startSource(voice, n, at, 0);
@@ -687,16 +740,22 @@
             stem.lastHeard = n;
         }
 
-        function leave(voice, at) {
-            const fade = fadeBars(voice.stem.role, false) * clock.barTime;
+        // Reshape a voice's level from `at` on: straight lines through the given [time, level] points
+        function shape(voice, at, points) {
             const from = levelAt(voice, at);
-            voice.leaving = true;
-            voice.envelope = { t0: at, v0: from, t1: at + fade, v1: 0 };
             voice.layer.gain.cancelScheduledValues(at);
             voice.layer.gain.setValueAtTime(from, at);
-            voice.layer.gain.linearRampToValueAtTime(0, at + fade);
+            points.forEach(([t, v]) => voice.layer.gain.linearRampToValueAtTime(v, t));
+            voice.points = [...voice.points.filter(([t]) => t < at), [at, from], ...points];
+        }
+
+        function leave(voice, at) {
+            const fade = fadeBars(voice.stem.role, false) * clock.barTime;
+            voice.leaving = true;
+            shape(voice, at, [[at + fade, 0]]);
             voice.endsAt = at + fade + 0.1;
             voice.sources.forEach(s => s.source.stop(voice.endsAt));
+            Object.values(voice.motion).forEach(m => m && m.lfo.stop(voice.endsAt));
             voice.stem.lastHeard = nextBar + fadeBars(voice.stem.role, false);
             setTimeout(() => {
                 voices = voices.filter(v => v !== voice);
@@ -705,10 +764,16 @@
         }
 
         function levelAt(voice, t) {
-            const { t0, v0, t1, v1 } = voice.envelope;
-            if (t <= t0) return v0;
-            if (t >= t1) return v1;
-            return v0 + (v1 - v0) * (t - t0) / (t1 - t0);
+            const points = voice.points;
+            if (t <= points[0][0]) return points[0][1];
+            for (let i = 1; i < points.length; i++) {
+                const [t1, v1] = points[i];
+                if (t <= t1) {
+                    const [t0, v0] = points[i - 1];
+                    return t1 === t0 ? v1 : v0 + (v1 - v0) * (t - t0) / (t1 - t0);
+                }
+            }
+            return points[points.length - 1][1];
         }
 
         // A stem's loop, started at bar n so it lines up with everything else
@@ -803,7 +868,10 @@
                 const stopping = voices;
                 voices = [];
                 setTimeout(() => {
-                    stopping.forEach(v => v.sources.forEach(s => { try { s.source.stop(); } catch (e) {} }));
+                    stopping.forEach(v => {
+                        v.sources.forEach(s => { try { s.source.stop(); } catch (e) {} });
+                        Object.values(v.motion).forEach(m => { try { m && m.lfo.stop(); } catch (e) {} });
+                    });
                     if (!playing) ctx.suspend();
                 }, 1400);
                 releaseWakeLock();
@@ -884,10 +952,10 @@
             const beat = clock && playing ? ((now - clock.start) / beatTime % 1 + 1) % 1 : 0.5;
             const shown = playing ? voices : [];
             shown.forEach(voice => {
-                const level = levelAt(voice, now);
+                const level = levelAt(voice, now) * valueOf(voice.motion.lilt, now);
                 if (level <= 0.001) return;
                 const stem = voice.stem;
-                let x = R;
+                let x = R + valueOf(voice.motion.drift, now) * R * 0.35;
                 let y = R;
                 let radius;
                 if (stem.role === 'bed') {

@@ -1,7 +1,8 @@
 """Placeholder loops for Gilvry, so the app has something to play before real stems arrive.
 
 Every loop is 16 bars of 4/4 at 160 bpm in D, on one shared chord progression, rendered so
-anything ringing past the end wraps around to the start (seamless). Writes FLAC into stems/.
+anything ringing past the end wraps around to the start (seamless). Mostly plucks, blips and
+arpeggios: short sounds that make rhythm, rather than melodies. Writes FLAC into stems/.
 Run from the repo root: python3 tools/placeholders.py  (needs numpy and ffmpeg)
 """
 import subprocess
@@ -16,7 +17,6 @@ L = int(round(BARS * 4 * BEAT * SR))
 # One chord per bar, shared by every stem
 CHORDS = ['D', 'D', 'G', 'D', 'D', 'D', 'A', 'A', 'D', 'D', 'G', 'D', 'G', 'A', 'D', 'D']
 TONES = {'D': [62, 66, 69], 'G': [67, 71, 62], 'A': [69, 73, 64], 'Bm': [71, 62, 66]}
-SCALE = [62, 64, 66, 67, 69, 71, 73]  # D major
 
 
 def hz(midi):
@@ -60,23 +60,6 @@ def pluck(freq, dur, bright=1.0, decay=1.6, harmonics=14, rng=None):
     return out
 
 
-def bowed(freq, dur, bright=1.0, vibrato=5.2, depth=0.006, attack=0.12, release=0.2, harmonics=22):
-    n = int(dur * SR)
-    t = np.arange(n) / SR
-    vib = 1 + depth * np.sin(2 * np.pi * vibrato * t) * np.minimum(1, t / 0.4)
-    phase = 2 * np.pi * np.cumsum(freq * vib) / SR
-    out = np.zeros(n)
-    for k in range(1, harmonics + 1):
-        if freq * k > SR / 2.2:
-            break
-        # A saw, rolled off; bright lets more upper harmonics through, with a body resonance near 3k
-        amp = (1 / k) * np.exp(-k / (5 + 9 * bright)) * (1 + 0.6 * np.exp(-((freq * k - 2900) / 900) ** 2))
-        out += amp * np.sin(k * phase)
-    noise = np.random.default_rng(int(freq)).standard_normal(n)
-    noise = np.diff(np.concatenate([[0], noise])) * 0.012 * bright
-    return (out + noise) * env(n, attack, release)
-
-
 def pad(freqs, dur, bright=0.5, attack=1.2, release=1.4):
     n = int(dur * SR)
     t = np.arange(n) / SR
@@ -114,25 +97,43 @@ def kick(dur=0.45):
     return np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t * 9)
 
 
-def melody(rng, notes_per_bar, register, leap=2, chord_pull=0.6):
-    """A wandering line: steps through the scale, leaning on chord tones at each bar."""
-    scale = sorted(set(s + 12 * o for s in SCALE for o in (-1, 0, 1, 2)))
-    pos = min(range(len(scale)), key=lambda i: abs(scale[i] - register))
-    line = []
-    for bar in range(BARS):
-        chord = [c % 12 for c in TONES[CHORDS[bar]]]
-        for i in range(notes_per_bar):
-            if i == 0 and rng.random() < chord_pull:
-                near = [j for j in range(len(scale)) if scale[j] % 12 in chord and abs(j - pos) <= 3]
-                if near:
-                    pos = near[rng.integers(len(near))]
-            else:
-                pos += int(rng.integers(-leap, leap + 1))
-            pos = int(np.clip(pos, 0, len(scale) - 1))
-            if abs(scale[pos] - register) > 9:
-                pos += -1 if scale[pos] > register else 1
-            line.append((bar * 4 + i * 4 / notes_per_bar, scale[pos]))
-    return line
+def bloop(freq, dur, decay=7, drop=0.6):
+    """A round blip: a sine that lands on its pitch from a little above, and dies away."""
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    f = freq * (1 + drop * np.exp(-t * 70))
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    return (np.sin(ph) + 0.15 * np.sin(2 * ph)) * np.exp(-t * decay) * np.minimum(1, t / 0.002)
+
+
+def bleep(freq, dur, decay=14, bright=0.6):
+    """A short hollow beep: odd harmonics only, like a square wave with the edges rounded off."""
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    out = np.zeros(n)
+    for k in (1, 3, 5, 7):
+        out += (1 / k) * bright ** ((k - 1) / 2) * np.sin(2 * np.pi * freq * k * t)
+    return out * np.exp(-t * decay) * np.minimum(1, t / 0.002)
+
+
+def fm(freq, dur, ratio=3.5, index=2.5, decay=4, index_decay=9):
+    """A struck, slightly metallic tone (kalimba, marimba), by frequency modulation."""
+    n = int(dur * SR)
+    t = np.arange(n) / SR
+    mod = index * np.exp(-t * index_decay) * np.sin(2 * np.pi * freq * ratio * t)
+    return np.sin(2 * np.pi * freq * t + mod) * np.exp(-t * decay) * np.minimum(1, t / 0.002)
+
+
+def euclid(hits, steps, rotate=0):
+    """hits spread as evenly as they'll go over steps (the rhythms behind a lot of world music)."""
+    return [((i * hits) // steps != ((i + 1) * hits) // steps) for i in range(-rotate, steps - rotate)][::-1]
+
+
+def chord_at(beat):
+    return TONES[CHORDS[int(beat // 4) % BARS]]
+
+
+PENTATONIC = [62, 64, 66, 69, 71]  # D E F# A B: sits well over every chord here
 
 
 def finish(loop, name, target_rms=0.08):
@@ -237,30 +238,97 @@ def main():
                 lp.add(pluck(hz(m), 3.0, bright=0.15, decay=0.9, rng=rng), at(bar * 4 + beat))
     finish(lp, 'pluck_e1_dusky_01')
 
-    # Fiddles
+    # Up-arpeggio of round bloops in eighths, with gaps, soft and low
     lp = Loop()
-    for beat, m in melody(np.random.default_rng(1), 1, 57, leap=1):
-        lp.add(bowed(hz(m), 4 * BEAT + 0.25, bright=0.35, attack=0.35, release=0.35, depth=0.004), at(beat))
-    finish(lp, 'fiddle_e1_dusky_01')
-    lp = Loop()
-    for beat, m in melody(np.random.default_rng(2), 2, 69, leap=2):
-        lp.add(bowed(hz(m), 2 * BEAT + 0.12, bright=0.6, attack=0.15, release=0.2), at(beat))
-    finish(lp, 'fiddle_e2_calm_01')
-    lp = Loop()
-    for beat, m in melody(np.random.default_rng(3), 8, 74, leap=2, chord_pull=0.8):
-        lp.add(bowed(hz(m), BEAT / 2 + 0.03, bright=1.0, attack=0.02, release=0.04, depth=0.002), at(beat))
-    finish(lp, 'fiddle_e3_bright_01')
+    rest = np.random.default_rng(6)
+    for i in range(BARS * 8):
+        beat = i / 2
+        chord = chord_at(beat)
+        notes = [chord[0] - 12, chord[1] - 12, chord[2] - 12, chord[0]]
+        if rest.random() < 0.8:
+            lp.add(bloop(hz(notes[i % 4]), 0.5, decay=6), at(beat))
+    finish(lp, 'arp_e1_misty_01')
 
-    # Whistle: airy sine with a little breath
+    # Sequencer: up-and-down sixteenths of bleeps, accents on the beat
     lp = Loop()
-    for beat, m in melody(np.random.default_rng(4), 2, 81, leap=2):
-        n = int((2 * BEAT + 0.08) * SR)
-        tt = np.arange(n) / SR
-        f = hz(m) * (1 + 0.004 * np.sin(2 * np.pi * 5.5 * tt) * np.minimum(1, tt / 0.3))
-        ph = 2 * np.pi * np.cumsum(f) / SR
-        tone = np.sin(ph) + 0.08 * np.sin(2 * ph) + 0.03 * noise_burst(n / SR, 0, rng)
-        lp.add(tone * env(n, 0.05, 0.1), at(beat))
-    finish(lp, 'whistle_e2_bright_01')
+    for i in range(BARS * 16):
+        beat = i / 4
+        chord = chord_at(beat)
+        notes = [chord[0], chord[1], chord[2], chord[0] + 12, chord[2], chord[1]]
+        lp.add(bleep(hz(notes[i % 6] + 12), 0.18, decay=22) * (1 if i % 4 == 0 else 0.55), at(beat))
+    finish(lp, 'seq_e3_bright_01')
+
+    # Kalimba: seven hits spread over sixteen steps, on the pentatonic, drifting up and down
+    lp = Loop()
+    pattern = euclid(7, 16)
+    walk = 2
+    krng = np.random.default_rng(7)
+    for bar in range(BARS):
+        for step, hit in enumerate(pattern):
+            if hit:
+                walk = int(np.clip(walk + krng.integers(-2, 3), 0, 9))
+                m = PENTATONIC[walk % 5] + 12 * (walk // 5)
+                lp.add(fm(hz(m), 1.2, ratio=5.6, index=1.6, decay=3.5), at(bar * 4 + step / 4))
+    finish(lp, 'kalimba_e2_warm_01')
+
+    # Marimba: the tresillo (3 + 3 + 2 eighths) on root and fifth, a chord tone on top
+    lp = Loop()
+    for bar in range(BARS):
+        chord = TONES[CHORDS[bar]]
+        for beat, m in ((0, chord[0] - 12), (1.5, chord[2] - 12), (3, chord[0]), (3.5, chord[1])):
+            lp.add(fm(hz(m), 1.0, ratio=4, index=1.2, decay=5, index_decay=14), at(bar * 4 + beat))
+    finish(lp, 'marimba_e2_calm_01')
+
+    # Low bloops, few and far between, off the beat
+    lp = Loop()
+    brng = np.random.default_rng(8)
+    for bar in range(BARS):
+        root = TONES[CHORDS[bar]][0] % 12 + 38
+        for beat in (0.5, 1.75, 2.5, 3.25):
+            if brng.random() < 0.45:
+                lp.add(bloop(hz(root + int(brng.choice([0, 7, 12]))), 0.9, decay=4, drop=1.2), at(bar * 4 + beat))
+    finish(lp, 'blip_e1_dusky_01')
+
+    # High bleeps: five over eight, octaves leaping
+    lp = Loop()
+    pattern = euclid(5, 8, rotate=1)
+    for bar in range(BARS):
+        chord = TONES[CHORDS[bar]]
+        for step, hit in enumerate(pattern):
+            if hit:
+                m = chord[step % 3] + (24 if step % 2 else 12)
+                lp.add(bleep(hz(m), 0.25, decay=16, bright=0.4), at(bar * 4 + step / 2))
+    finish(lp, 'bleep_e3_warm_01')
+
+    # Pulse: one note repeating in eighths, the root or its fifth, some notes louder
+    lp = Loop()
+    accents = [1, 0.4, 0.6, 0.4, 0.9, 0.4, 0.6, 0.7]
+    for bar in range(BARS):
+        root = TONES[CHORDS[bar]][0] % 12 + 50
+        for i in range(8):
+            m = root + (7 if bar % 4 == 3 and i >= 4 else 0)
+            lp.add(fm(hz(m), 0.3, ratio=2, index=0.8, decay=11) * accents[i], at(bar * 4 + i / 2))
+    finish(lp, 'pulse_e2_misty_01')
+
+    # Three against four: a three-note figure in dotted eighths, so it lands somewhere new each beat
+    lp = Loop()
+    i = 0
+    beat = 0.0
+    while beat < BARS * 4:
+        chord = chord_at(beat)
+        lp.add(pluck(hz([chord[0], chord[2], chord[1] + 12][i % 3]), 0.9, bright=0.8, decay=4, rng=rng), at(beat))
+        beat += 0.75
+        i += 1
+    finish(lp, 'triplet_e2_bright_01')
+
+    # Drips: now and then a high clear note, from the pentatonic
+    lp = Loop()
+    drng = np.random.default_rng(9)
+    for step in range(BARS * 8):
+        if drng.random() < 0.18:
+            m = int(drng.choice(PENTATONIC)) + 24
+            lp.add(bloop(hz(m), 1.4, decay=3, drop=0.08) * 0.6, at(step / 2))
+    finish(lp, 'drip_e1_calm_01')
 
     # Bells: a few chimes, long rings that wrap past the loop end
     lp = Loop()
