@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Lvry</title>
+    <title>ilvry</title>
     <meta name="description" content="Loops and a drone that layer and wander on their own, steered by a few mysterious sliders.">
     <meta name="theme-color" content="#f7f3e9">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="Lvry">
+    <meta name="apple-mobile-web-app-title" content="ilvry">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
@@ -253,7 +253,7 @@
     <div class="container">
         <header>
             <img src="icons/icon.svg" alt="">
-            <h1>Lvry</h1>
+            <h1>ilvry</h1>
         </header>
 
         <div class="card player" id="player" style="--accent: var(--rust)">
@@ -289,12 +289,12 @@
         </div>
 
         <div class="credit">
-            Made by <a href="https://mgilvryallen.com" target="_blank">M'Gilvry Allen</a><br><a href="https://github.com/mgilvryallen/lvry" target="_blank">make your own copy</a>
+            Made by <a href="https://mgilvryallen.com" target="_blank">M'Gilvry Allen</a><br><a href="https://github.com/mgilvryallen/ilvry" target="_blank">make your own copy</a>
         </div>
     </div>
 
     <script>
-        const SETTINGS_KEY = 'lvrySettings';
+        const SETTINGS_KEY = 'ilvrySettings';
         const DEFAULTS = { kindling: 0.35, hour: 0.5, gait: null, hum: 0.65 };
         const PHRASE = 4; // bars between the engine's chances to change its mind
 
@@ -408,7 +408,7 @@
             if (!('caches' in window)) return;
             const current = new Set(index.stems.map(s => s.file));
             for (const key of await caches.keys()) {
-                if (!key.startsWith('lvry-')) continue;
+                if (!key.startsWith('ilvry-')) continue;
                 const cache = await caches.open(key);
                 for (const request of await cache.keys()) {
                     const file = decodeURIComponent(request.url.split('/loops/')[1] || '');
@@ -615,16 +615,51 @@
         // Hum adds Front Porch's voices one at a time, root first; all six at the top
         const HUM_ORDER = ['root', 'fifth', 'low', 'high', 'ninth', 'tenth'];
 
-        function tuneDrone() {
-            if (!drone) return;
+        // The hum is never still: voices swell and sink on their own, and any but the root may
+        // drop out for a while and ease back in. glow brightens the tone a little as voices surge.
+        const humLife = { resting: new Set(), swell: {}, glow: 0, timer: null };
+
+        function humVoices() {
             const hum = settings.hum;
             const count = hum < 0.02 ? 0 : Math.min(HUM_ORDER.length, 1 + Math.floor(hum * HUM_ORDER.length));
+            return HUM_ORDER.slice(0, count);
+        }
+
+        function tuneDrone(fade) {
+            if (!drone) return;
+            const hum = settings.hum;
+            const voices = humVoices().filter(id => !humLife.resting.has(id));
             drone.set({
-                voices: HUM_ORDER.slice(0, count),
-                level: count ? 0.3 + 0.4 * hum : 0,
-                tone: 30 + 30 * settings.hour,
+                voices, swell: humLife.swell, fade: fade ?? 0.12,
+                level: voices.length ? 0.3 + 0.4 * hum : 0,
+                tone: 30 + 30 * settings.hour + 10 * humLife.glow,
                 mingle: Math.round(25 + 50 * settings.kindling)
             });
+        }
+
+        function liveHum() {
+            clearTimeout(humLife.timer);
+            if (!playing) return;
+            const all = humVoices();
+            const id = all[Math.floor(Math.random() * all.length)];
+            if (id) {
+                // Every other voice settles part of the way back toward its usual level
+                all.forEach(v => { if (v !== id && humLife.swell[v] !== undefined) humLife.swell[v] = 1 + (humLife.swell[v] - 1) * 0.55; });
+                const resting = humLife.resting.has(id);
+                if (resting) {
+                    humLife.resting.delete(id);                    // back it comes
+                    humLife.swell[id] = 0.6 + Math.random() * 0.5;
+                } else if (id !== 'root' && humLife.resting.size < all.length - 2 && Math.random() < 0.35) {
+                    humLife.resting.add(id);                       // it sinks away for a while
+                } else {
+                    humLife.swell[id] = 0.45 + Math.random() * 0.85; // a surge, or an ebb
+                }
+                // The strongest surge among the voices that are sounding sets the glow
+                const surge = Math.max(0, ...all.filter(v => !humLife.resting.has(v)).map(v => (humLife.swell[v] ?? 1) - 1));
+                humLife.glow = Math.min(1, surge / 0.3);
+                tuneDrone(2 + Math.random() * 3);
+            }
+            humLife.timer = setTimeout(liveHum, (3 + Math.random() * 6) * 1000);
         }
 
         // A soft room, made from decaying noise
@@ -680,11 +715,13 @@
 
         // ---- The hum: Drone, inside ----
         // This is Drone's own sound engine (github.com/mgilvryallen/drone), copied in unchanged but
-        // for where its sound goes and how loud: three detuned reeds per voice, buzz, bellows,
-        // air, and Mingle's strays. It runs as Front Porch. Hum decides how many of Front Porch's
-        // voices are on; Hour moves its tone, Kindling its Mingle.
+        // for where its sound goes, how loud, and how slowly its voices change level: three detuned
+        // reeds per voice, buzz, bellows, air, and Mingle's strays. It runs as Front Porch. Hum
+        // decides how many of Front Porch's voices it can use; Hour moves its tone, Kindling its
+        // Mingle; and on its own it lets voices swell, fade, drop out and come back.
         function makeDrone(context, output, key, octave) {
             let level = 0;
+            let fade = 0.12; // how slowly voices move to new levels (a time constant, in seconds)
             const settings = {
                 key, octave, cents: 0, mingle: 50, tone: 45, breath: 50,
                 voices: {}, levels: {}
@@ -909,7 +946,7 @@
                     if (!settings.voices[voice.id] && !eng.voices[voice.id]) return;
                     const { gain, oscillators } = voiceNodes(eng, voice);
                     oscillators.forEach(osc => osc.frequency.setTargetAtTime(root * ratioOf(voice), t, glide));
-                    gain.gain.setTargetAtTime(levelOf(voice) * blend, t, immediate ? 0.001 : 0.12);
+                    gain.gain.setTargetAtTime(levelOf(voice) * blend, t, immediate ? 0.001 : fade);
                 });
 
                 const cutoff = toneCutoff();
@@ -1081,6 +1118,8 @@
                     const mingleWas = settings.mingle;
                     if (changes.level !== undefined) level = changes.level;
                     if (changes.voices) VOICES.forEach(v => settings.voices[v.id] = changes.voices.includes(v.id));
+                    if (changes.swell) VOICES.forEach(v => settings.levels[v.id] = Math.round(v.level * (changes.swell[v.id] ?? 1)));
+                    if (changes.fade !== undefined) fade = changes.fade;
                     ['tone', 'mingle'].forEach(name => { if (changes[name] !== undefined) settings[name] = changes[name]; });
                     if (engine) {
                         if (!settings.mingle) releaseWanderers(engine);
@@ -1127,7 +1166,7 @@
                 bed: has('bed') && settings.hum <= 0.5 ? 1 : 0,
                 low: has('low') && k > 0.12 ? 1 : 0,
                 rhythm: has('rhythm') ? (k > 0.62 ? 2 : k > 0.3 ? 1 : 0) : 0,
-                tune: Math.max(1, Math.round(1 + 2 * k))
+                tune: k < 0.5 ? 1 : 2
             };
         }
 
@@ -1371,6 +1410,7 @@
                 const opening = (counts.bed ? ['bed', 'tune'] : ['tune']).map(role => stems.filter(s => s.role === role && bufferFor(s, bpm))).filter(list => list.length);
                 opening.forEach(list => join(pickWeighted(list, s => Math.pow(score(s), 2) + 1e-6), 0, start, 0.01));
                 drone.start();
+                humLife.timer = setTimeout(liveHum, 6000);
                 nextBar = 1;
                 unsettled = true;
                 master.gain.cancelScheduledValues(ctx.currentTime);
@@ -1386,6 +1426,7 @@
                 master.gain.setValueAtTime(master.gain.value, t);
                 master.gain.linearRampToValueAtTime(0, t + 1.2);
                 drone.stop();
+                clearTimeout(humLife.timer);
                 const stopping = voices;
                 voices = [];
                 setTimeout(() => {
@@ -1452,6 +1493,7 @@
         }
 
         const canvas = document.getElementById('canvas');
+        const rings = {};
         const paint = canvas.getContext('2d');
 
         function draw() {
@@ -1473,15 +1515,19 @@
 
             paint.globalCompositeOperation = 'multiply';
             // The hum: soft rings, one per voice, breathing slowly from the middle
-            const humVoices = playing && drone ? drone.voiceCount() : 0;
-            for (let i = 0; i < humVoices; i++) {
+            HUM_ORDER.forEach((id, i) => {
+                const target = playing && drone && humVoices().includes(id) && !humLife.resting.has(id) ? (humLife.swell[id] ?? 1) : 0;
+                rings[id] = (rings[id] ?? 0) + (target - (rings[id] ?? 0)) * 0.012;
+            });
+            HUM_ORDER.forEach((id, i) => {
+                if (rings[id] < 0.01) return;
                 const r = R * (0.2 + 0.13 * i + 0.02 * Math.sin(wall * 0.5 + i * 1.3));
-                paint.strokeStyle = `rgba(176, 125, 42, ${0.1 + 0.05 * settings.hum})`;
+                paint.strokeStyle = `rgba(176, 125, 42, ${0.16 * rings[id]})`;
                 paint.lineWidth = R * 0.05;
                 paint.beginPath();
                 paint.arc(R, R, r, 0, Math.PI * 2);
                 paint.stroke();
-            }
+            });
             const beatTime = clock ? clock.barTime / index.beatsPerBar : 1;
             const beat = clock && playing ? ((now - clock.start) / beatTime % 1 + 1) % 1 : 0.5;
             const shown = playing ? voices : [];

@@ -1,6 +1,6 @@
 {
-  "name": "Lvry",
-  "short_name": "Lvry",
+  "name": "ilvry",
+  "short_name": "ilvry",
   "description": "Loops and a drone that layer and wander on their own, steered by a few mysterious sliders.",
   "start_url": "./",
   "scope": "./",

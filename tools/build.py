@@ -1,4 +1,4 @@
-"""Turn the stems/ folder into what Lvry plays: loops/*.mp3 and loops/index.json.
+"""Turn the stems/ folder into what ilvry plays: loops/*.mp3 and loops/index.json.
 
 Takes WAV, AIFF, FLAC, MP3, M4A/AAC, OGG/Opus or CAF, any sample rate or bit depth, mono or
 stereo. Each stem is checked against the others' length, measured for loudness (so they can be
@@ -7,7 +7,7 @@ start after it. MP3s carry a sliver of silence at the start that differs by brow
 loop wrapped around itself, the app can cut out an exact, seamless loop whatever that sliver is.
 
 Names: instrument_e1_mood_01.wav (energy 1 to 3, take number optional), for example
-fiddle_e3_bright_01.wav. Settings are in lvry.json.
+fiddle_e3_bright_01.wav. Settings are in ilvry.json.
 
 python3 tools/build.py [out_dir]   (default: loops; needs ffmpeg)
 """
@@ -59,14 +59,14 @@ def main():
     root = Path(__file__).resolve().parent.parent
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else root / 'loops'
     out.mkdir(parents=True, exist_ok=True)
-    config = json.loads((root / 'lvry.json').read_text())
+    config = json.loads((root / 'ilvry.json').read_text())
     warnings = []
 
     found = []
     for path in sorted((root / 'stems').iterdir()):
         if path.name.startswith('.') or path.suffix.lower() not in AUDIO:
             if path.is_file() and not path.name.startswith('.') and path.name.lower() != 'readme.md':
-                warnings.append(f'{path.name}: not an audio file Lvry knows, skipped.')
+                warnings.append(f'{path.name}: not an audio file ilvry knows, skipped.')
             continue
         match = NAME.match(path.stem)
         if not match:
@@ -106,7 +106,7 @@ def main():
             continue
         names.add(name)
         if mood not in config['moods']:
-            warnings.append(f'{path.name}: the mood "{mood}" isn\'t in lvry.json\'s moods list, so it sits in the middle.')
+            warnings.append(f'{path.name}: the mood "{mood}" isn\'t in ilvry.json\'s moods list, so it sits in the middle.')
 
         digest = hashlib.sha1(BUILD_VERSION.encode() + path.read_bytes()).hexdigest()[:10]
         lufs = loudness(audio)
@@ -138,7 +138,7 @@ def main():
     summary = os.environ.get('GITHUB_STEP_SUMMARY')
     if summary:
         with open(summary, 'a') as f:
-            f.write(f'### Lvry: {len(stems)} stems, {bpm:.1f} bpm\n\n')
+            f.write(f'### ilvry: {len(stems)} stems, {bpm:.1f} bpm\n\n')
             f.write('\n'.join(f'- {s["name"]} ({s["role"]}, {s["lufs"]} LUFS)' for s in stems) + '\n')
             if warnings:
                 f.write('\n**Warnings**\n\n' + '\n'.join(f'- {w}' for w in warnings) + '\n')

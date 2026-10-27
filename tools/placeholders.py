@@ -1,4 +1,4 @@
-"""Placeholder loops for Lvry, so the app has something to play before real stems arrive.
+"""Placeholder loops for ilvry, so the app has something to play before real stems arrive.
 
 Every loop is 16 bars of 4/4 at 90 bpm in D, on one shared chord progression, rendered so
 anything ringing past the end wraps around to the start (seamless). Blips, plucks, arpeggios,
@@ -344,16 +344,6 @@ def main():
             lp.add(bloop(hz(notes[i % 4]), 0.6, decay=5) * velocity([1, 0.8, 0.9, 0.85][i % 4], 0.35) * lean(i, 2), at(bar_wrap(beat)))
     finish(lp, 'arp_e1_misty_01')
 
-    # Sequencer: up-and-down sixteenths of bleeps, swung, leaning on the beat
-    feel(0.52)
-    lp = Loop()
-    for i in range(BARS * 16):
-        chord = chord_at(i / 4)
-        notes = [chord[0], chord[1], chord[2], chord[0] + 12, chord[2], chord[1]]
-        if rng.random() < 0.85:
-            lp.add(bleep(hz(notes[i % 6] + 12), 0.22, decay=18) * velocity(0.95, 0.4) * lean(i, 4), at(bar_wrap(sixteenth(i))))
-    finish(lp, 'seq_e3_bright_01')
-
     # Kalimba: seven hits spread over sixteen steps, on the pentatonic, drifting
     feel(0.54)
     lp = Loop()
@@ -367,25 +357,6 @@ def main():
                 lp.add(fm(hz(m), 1.4, ratio=5.6, index=1.6, decay=3) * velocity(0.85, 0.4) * lean(step, 4), at(bar_wrap(bar * 4 + sixteenth(step))))
     finish(lp, 'kalimba_e2_warm_01')
 
-    # Marimba: the tresillo (3 + 3 + 2) on root and fifth, a chord tone on top
-    feel(0.53)
-    lp = Loop()
-    for bar in range(BARS):
-        chord = TONES[CHORDS[bar]]
-        for step, m, vel in ((0, chord[0] - 12, 1), (6, chord[2] - 12, 0.7), (12, chord[0], 0.85), (14, chord[1], 0.5)):
-            lp.add(fm(hz(m), 1.2, ratio=4, index=1.2, decay=4, index_decay=14) * velocity(vel, 0.3) * lean(step, 4), at(bar_wrap(bar * 4 + sixteenth(step))))
-    finish(lp, 'marimba_e2_calm_01')
-
-    # Low bloops, few and far between, off the beat
-    feel(0.55)
-    lp = Loop()
-    for bar in range(BARS):
-        root = root_at(bar * 4, 38)
-        for step in (2, 7, 10, 13):
-            if rng.random() < 0.45:
-                lp.add(bloop(hz(root + int(rng.choice([0, 7, 12]))), 1.1, decay=3.5, drop=1.2) * velocity(0.85, 0.4) * lean(step, 4), at(bar_wrap(bar * 4 + sixteenth(step))))
-    finish(lp, 'blip_e1_dusky_01')
-
     # High bleeps: five over eight, octaves leaping
     feel(0.51)
     lp = Loop()
@@ -397,30 +368,6 @@ def main():
                 m = chord[step % 3] + (24 if step % 2 else 12)
                 lp.add(bleep(hz(m), 0.3, decay=13, bright=0.4) * velocity(0.85, 0.4) * lean(step, 2), at(bar_wrap(bar * 4 + eighth(step))))
     finish(lp, 'bleep_e3_warm_01')
-
-    # Pulse: one note repeating in swung eighths, some much louder than others
-    feel(0.54)
-    lp = Loop()
-    accents = [1, 0.75, 0.85, 0.8, 0.95, 0.75, 0.85, 0.9]
-    for bar in range(BARS):
-        root = TONES[CHORDS[bar]][0] % 12 + 50
-        for i in range(8):
-            m = root + (7 if bar % 4 == 3 and i >= 4 else 0)
-            lp.add(fm(hz(m), 0.4, ratio=2, index=0.8, decay=9) * velocity(accents[i], 0.25) * lean(i, 2), at(bar_wrap(bar * 4 + eighth(i))))
-    finish(lp, 'pulse_e2_misty_01')
-
-    # Three against four: a three-note figure in dotted eighths, landing somewhere new each beat
-    feel(0.53)
-    lp = Loop()
-    i = 0
-    beat = 0.0
-    while beat < BARS * 4:
-        chord = chord_at(beat)
-        lp.add(pluck(hz([chord[0], chord[2], chord[1] + 12][i % 3]), 1.0, bright=0.8, decay=3.5, rng=rng) * velocity([1, 0.6, 0.75][i % 3], 0.35),
-               at(bar_wrap(beat + groove.normal(0, LOOSE))))
-        beat += 0.75
-        i += 1
-    finish(lp, 'triplet_e2_bright_01')
 
     # Drips: now and then a high clear note
     feel(0.55)

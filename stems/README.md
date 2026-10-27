@@ -6,13 +6,13 @@ for a summary and any warnings).
 **Names:** `instrument_e2_mood_01.wav`
 
 - **instrument:** anything, lowercase, e.g. `fiddle`, `banjo`, `kalimba`. Only one loop per
-  instrument plays at a time. Some names have a part to play (lists in `lvry.json`):
+  instrument plays at a time. Some names have a part to play (lists in `ilvry.json`):
   `pad` and `drone` are beds, `sub` and `bass` are the low end (one is nearly always on),
   `drums`, `hats`, `perc`, `shaker`, `bodhran`, `bones` and `spoons` are rhythm (up to two at
   once, as Kindling rises). Everything else floats on top.
 - **e1, e2 or e3:** energy, 1 is quietest.
 - **mood:** one of `dusky`, `misty`, `calm`, `warm`, `bright` (dusk to dawn, also in
-  `lvry.json`, where you can add your own).
+  `ilvry.json`, where you can add your own).
 - **01:** take number, so you can have more than one of a kind.
 
 **Files:** WAV, AIFF, FLAC, MP3, M4A/AAC, OGG/Opus or CAF. Any sample rate and bit depth,
