@@ -1,7 +1,7 @@
 {
-  "name": "Gilvry",
-  "short_name": "Gilvry",
-  "description": "Folk loops that layer and wander on their own, steered by a few mysterious sliders.",
+  "name": "Lvry",
+  "short_name": "Lvry",
+  "description": "Loops and a drone that layer and wander on their own, steered by a few mysterious sliders.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

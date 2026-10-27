@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Gilvry</title>
-    <meta name="description" content="Folk loops that layer and wander on their own, steered by a few mysterious sliders.">
+    <title>Lvry</title>
+    <meta name="description" content="Loops and a drone that layer and wander on their own, steered by a few mysterious sliders.">
     <meta name="theme-color" content="#f7f3e9">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="Gilvry">
+    <meta name="apple-mobile-web-app-title" content="Lvry">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
@@ -253,7 +253,7 @@
     <div class="container">
         <header>
             <img src="icons/icon.svg" alt="">
-            <h1>Gilvry</h1>
+            <h1>Lvry</h1>
         </header>
 
         <div class="card player" id="player" style="--accent: var(--rust)">
@@ -281,21 +281,21 @@
                 <input type="range" id="gait" min="0" max="1000" oninput="setSetting('gait', this.value / 1000)" aria-label="Gait">
                 <div class="slider-ends"><span>amble</span><span>scurry</span></div>
             </div>
-            <div class="slider-row" style="--row: var(--teal)">
-                <div class="slider-name">Wander</div>
-                <input type="range" id="wander" min="0" max="1000" oninput="setSetting('wander', this.value / 1000)" aria-label="Wander">
-                <div class="slider-ends"><span>linger</span><span>roam</span></div>
+            <div class="slider-row" style="--row: var(--ochre)">
+                <div class="slider-name">Hum</div>
+                <input type="range" id="hum" min="0" max="1000" oninput="setSetting('hum', this.value / 1000)" aria-label="Hum">
+                <div class="slider-ends"><span>hush</span><span>front porch</span></div>
             </div>
         </div>
 
         <div class="credit">
-            Made by <a href="https://mgilvryallen.com" target="_blank">M'Gilvry Allen</a><br><a href="https://github.com/mgilvryallen/gilvry" target="_blank">make your own copy</a>
+            Made by <a href="https://mgilvryallen.com" target="_blank">M'Gilvry Allen</a><br><a href="https://github.com/mgilvryallen/lvry" target="_blank">make your own copy</a>
         </div>
     </div>
 
     <script>
-        const SETTINGS_KEY = 'gilvrySettings';
-        const DEFAULTS = { kindling: 0.35, hour: 0.5, gait: null, wander: 0.4 };
+        const SETTINGS_KEY = 'lvrySettings';
+        const DEFAULTS = { kindling: 0.35, hour: 0.5, gait: null, hum: 0.65 };
         const PHRASE = 4; // bars between the engine's chances to change its mind
 
         function loadSettings() {
@@ -322,6 +322,8 @@
         let ctx = null;
         let stems = [];
 
+        // Every loop is fetched up front (small, compressed), but only decoded when it's likely to
+        // be wanted soon: a decoded 16-bar loop takes several MB of memory, and phones run out.
         async function loadAll() {
             ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' });
             index = await (await fetch('loops/index.json')).json();
@@ -333,9 +335,7 @@
                 while (queue.length) {
                     const meta = queue.shift();
                     try {
-                        const data = await (await fetch('loops/' + meta.file)).arrayBuffer();
-                        const decoded = await new Promise((resolve, reject) => ctx.decodeAudioData(data, resolve, reject));
-                        stems.push(makeStem(meta, exactLoop(decoded)));
+                        stems.push(makeStem(meta, await (await fetch('loops/' + meta.file)).arrayBuffer()));
                     } catch (e) {
                         console.warn('Could not load', meta.file, e);
                     }
@@ -346,10 +346,38 @@
             stems.sort((a, b) => a.name.localeCompare(b.name));
             pruneOldLoops();
             buildGraph();
+            setText('playLabel', 'tuning up…');
+            await Promise.all(likely().map(stem => decode(stem).catch(() => null)));
+            stems = stems.filter(stem => !stem.broken);
             document.getElementById('playBtn').disabled = !stems.length;
             setText('playLabel', stems.length ? 'tap to play' : 'no loops found');
             renderPlayer();
             requestTempo();
+        }
+
+        function decode(stem) {
+            if (stem.original) return Promise.resolve(stem.original);
+            if (!stem.decoding) {
+                stem.decoding = new Promise((resolve, reject) => ctx.decodeAudioData(stem.data.slice(0), resolve, reject))
+                    .then(decoded => {
+                        stem.original = exactLoop(decoded);
+                        stem.decoding = null;
+                        return stem.original;
+                    })
+                    .catch(e => {
+                        console.warn('Could not decode', stem.file, e);
+                        stem.broken = true;
+                        stem.decoding = null;
+                        throw e;
+                    });
+            }
+            return stem.decoding;
+        }
+
+        // Ready to play at this tempo: decoded, and re-timed if need be
+        async function ensureReady(stem, bpm) {
+            await decode(stem);
+            return isBase(bpm) ? stem.original : stretch(stem, bpm);
         }
 
         function exactLoop(decoded) {
@@ -363,11 +391,11 @@
             return buffer;
         }
 
-        function makeStem(meta, buffer) {
+        function makeStem(meta, data) {
             const moods = index.moods;
             const place = moods.indexOf(meta.mood);
             return {
-                ...meta, original: buffer, buffers: new Map(),
+                ...meta, data, original: null, buffers: new Map(),
                 energyAt: (meta.energy - 1) / 2,
                 moodAt: place < 0 ? 0.5 : place / Math.max(1, moods.length - 1),
                 color: colorFor(meta.instrument), angle: hash(meta.instrument) % 628 / 100,
@@ -380,7 +408,7 @@
             if (!('caches' in window)) return;
             const current = new Set(index.stems.map(s => s.file));
             for (const key of await caches.keys()) {
-                if (!key.startsWith('gilvry-')) continue;
+                if (!key.startsWith('lvry-')) continue;
                 const cache = await caches.open(key);
                 for (const request of await cache.keys()) {
                     const file = decodeURIComponent(request.url.split('/loops/')[1] || '');
@@ -407,11 +435,16 @@
 
         // Every loop at a given tempo has the same length, in seconds
         function loopSeconds(bpm) {
-            return Math.round(stems[0].original.length * index.bpm / bpm) / ctx.sampleRate;
+            const frames = Math.round(index.frames * ctx.sampleRate / index.sampleRate);
+            return Math.round(frames * index.bpm / bpm) / ctx.sampleRate;
+        }
+
+        function isBase(bpm) {
+            return Math.abs(bpm - index.bpm) < 0.01;
         }
 
         function bufferFor(stem, bpm) {
-            return Math.abs(bpm - index.bpm) < 0.01 ? stem.original : stem.buffers.get(bpm) || null;
+            return isBase(bpm) ? stem.original : stem.buffers.get(bpm) || null;
         }
 
         function wsolaWorker() {
@@ -520,19 +553,51 @@
                 const bpm = gaitBpm();
                 if (bpm === wantedBpm) return;
                 wantedBpm = bpm;
-                // What's playing first, so the change can be heard soon; then the rest, in the background
-                const playingNow = voices.filter(v => !v.leaving).map(v => v.stem);
-                await Promise.all(playingNow.map(stem => stretch(stem, bpm)));
+                // What's playing first, so the change can be heard soon; then what's likely next
+                await Promise.all(voices.map(v => ensureReady(v.stem, bpm)));
                 if (wantedBpm !== bpm) return;
                 readyBpm = bpm;
-                for (const stem of stems) {
-                    if (wantedBpm !== bpm) return;
-                    await stretch(stem, bpm);
-                }
-                // Keep only the versions in use
-                const keep = new Set([bpm, clock && clock.bpm]);
-                stems.forEach(stem => [...stem.buffers.keys()].forEach(key => { if (!keep.has(key)) stem.buffers.delete(key); }));
+                prepare();
             }, 250);
+        }
+
+        // The stems the engine is likely to reach for next: what's playing, and the best few
+        // fits for each part at the current slider settings
+        function likely() {
+            const keep = new Set(voices.map(v => v.stem));
+            ['bed', 'low', 'rhythm', 'tune'].forEach(role => {
+                stems.filter(s => s.role === role && !s.broken).sort((a, b) => score(b) - score(a)).slice(0, role === 'tune' ? 4 : 2).forEach(s => keep.add(s));
+            });
+            return [...keep];
+        }
+
+        // Get the likely stems ready at the tempo they'll play at, and let go of the rest
+        let prepTimer = null;
+        let preparing = false;
+
+        function prepare() {
+            clearTimeout(prepTimer);
+            prepTimer = setTimeout(async () => {
+                if (preparing) return prepare();
+                preparing = true;
+                const bpm = readyBpm ?? index.bpm;
+                const keep = likely();
+                for (const stem of keep) {
+                    if ((readyBpm ?? index.bpm) !== bpm) break;
+                    await ensureReady(stem, bpm).catch(() => null);
+                }
+                const tempos = new Set([bpm, clock && clock.bpm]);
+                const wanted = new Set([...likely(), ...voices.map(v => v.stem)]);
+                // Away from the loops' own tempo, a re-timed copy is all that's needed; the original
+                // can be decoded again from the MP3 if the tempo comes back
+                const offBase = [...tempos].every(t => t === null || t === undefined || !isBase(t));
+                stems.forEach(stem => {
+                    [...stem.buffers.keys()].forEach(key => { if (!tempos.has(key) || !wanted.has(stem)) stem.buffers.delete(key); });
+                    if (stem.decoding || (stem.pending && stem.pending.size)) return;
+                    if (!wanted.has(stem) || (offBase && stem.buffers.size)) stem.original = null;
+                });
+                preparing = false;
+            }, 400);
         }
 
         // ---- Sound ----
@@ -540,6 +605,27 @@
         let master = null;
         let mix = null;
         let shade = null;
+        let drone = null;
+
+        function keyIndex(name) {
+            const names = { 'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11 };
+            return names[String(name).replace('♯', '#').replace('♭', 'b')] ?? 2;
+        }
+
+        // Hum adds Front Porch's voices one at a time, root first; all six at the top
+        const HUM_ORDER = ['root', 'fifth', 'low', 'high', 'ninth', 'tenth'];
+
+        function tuneDrone() {
+            if (!drone) return;
+            const hum = settings.hum;
+            const count = hum < 0.02 ? 0 : Math.min(HUM_ORDER.length, 1 + Math.floor(hum * HUM_ORDER.length));
+            drone.set({
+                voices: HUM_ORDER.slice(0, count),
+                level: count ? 0.3 + 0.4 * hum : 0,
+                tone: 30 + 30 * settings.hour,
+                mingle: Math.round(25 + 50 * settings.kindling)
+            });
+        }
 
         // A soft room, made from decaying noise
         function makeRoom(seconds) {
@@ -576,13 +662,434 @@
             wet.gain.value = 0.22;
             mix.connect(shade);
             mix.connect(room).connect(wet).connect(shade);
+            const humBus = ctx.createGain();
+            humBus.connect(master);
+            const humRoom = ctx.createGain();
+            humRoom.gain.value = 0.35;
+            humBus.connect(humRoom).connect(room);
+            drone = makeDrone(ctx, humBus, keyIndex(index.drone.key), index.drone.octave);
             applyShade(true);
+            tuneDrone();
         }
 
         function applyShade(immediate) {
             if (!shade) return;
             const cutoff = 2600 * Math.pow(2, settings.hour * 2.8);
             shade.frequency.setTargetAtTime(cutoff, ctx.currentTime, immediate ? 0.01 : 0.6);
+        }
+
+        // ---- The hum: Drone, inside ----
+        // This is Drone's own sound engine (github.com/mgilvryallen/drone), copied in unchanged but
+        // for where its sound goes and how loud: three detuned reeds per voice, buzz, bellows,
+        // air, and Mingle's strays. It runs as Front Porch. Hum decides how many of Front Porch's
+        // voices are on; Hour moves its tone, Kindling its Mingle.
+        function makeDrone(context, output, key, octave) {
+            let level = 0;
+            const settings = {
+                key, octave, cents: 0, mingle: 50, tone: 45, breath: 50,
+                voices: {}, levels: {}
+            };
+
+            const VOICES = [
+                { id: 'low', label: 'Low root', ratio: [1, 2], level: 70, color: 'var(--indigo)' },
+                { id: 'lowfourth', label: 'Low 4th', ratio: [2, 3], level: 50, color: 'var(--slate)' },
+                { id: 'root', label: 'Root', ratio: [1, 1], level: 100, color: 'var(--rust)' },
+                { id: 'fourth', label: '4th', ratio: [4, 3], level: 55, color: 'var(--ochre)' },
+                { id: 'fifth', label: '5th', ratio: [3, 2], level: 80, color: 'var(--green)' },
+                { id: 'sixth', label: '6th', ratio: [27, 16], level: 40, color: 'var(--plum)' },
+                { id: 'seventh', label: '♭7th', ratio: [16, 9], level: 35, color: 'var(--berry)' },
+                { id: 'high', label: 'Octave', ratio: [2, 1], level: 45, color: 'var(--woad)' },
+                { id: 'ninth', label: '9th', ratio: [9, 4], level: 35, color: 'var(--teal)' },
+                { id: 'tenth', label: '10th', ratio: [5, 2], level: 35, color: 'var(--moss)' }
+            ];
+            VOICES.forEach(v => {
+                settings.voices[v.id] = false;
+                settings.levels[v.id] = v.level;
+            });
+
+            function rootFrequency() {
+                const midi = 12 * (settings.octave + 1) + settings.key;
+                return 440 * Math.pow(2, (midi - 69) / 12) * Math.pow(2, settings.cents / 1200);
+            }
+
+            function ratioOf(voice) {
+                const [n, d] = voice.ratio;
+                return n / d;
+            }
+
+            // ---- Sound engine ----
+            // Each voice is three slightly detuned "reeds" (like a shruti box's reed banks) playing a
+            // reed-like waveform, panned apart so they beat and shimmer against each other. They run
+            // through a soft saturator (a little buzz), a tone filter, and two nasal resonances. Slow
+            // drifting LFOs move the volume and brightness like a bellows; a little filtered noise adds air.
+
+            const REED_DETUNES = [[-3.5, 0, 4.2], [-3.3, 0.3, 3.4], [-2.6, 0.4, 3.1], [-3.2, 0.2, 3.5], [-4.1, -0.3, 2.7], [-2.9, 0.5, 4], [-3.4, 0.1, 3.9], [-3, 0.6, 3.8], [-3.6, -0.2, 3.3], [-2.7, 0.3, 3.6]];
+            const WANDER_DETUNES = [[-3.1, 0.2, 3.7]];
+
+            let engine = null;
+            let playing = false;
+
+            // Seeded random so the waveform is the same every time
+            function seededRandom(seed) {
+                return () => {
+                    seed = (seed * 16807) % 2147483647;
+                    return (seed - 1) / 2147483646;
+                };
+            }
+
+            function reedWave(context) {
+                const count = 48;
+                const real = new Float32Array(count + 1);
+                const imag = new Float32Array(count + 1);
+                const random = seededRandom(7);
+                for (let n = 1; n <= count; n++) {
+                    let amp = Math.pow(n, -0.85);
+                    if (n % 2 === 0) amp *= 0.72;            // reeds lean toward odd harmonics
+                    if (n >= 3 && n <= 7) amp *= 1.3;         // a nasal bump in the low-mid harmonics
+                    const phase = random() * Math.PI * 2;     // scattered phases soften the peaks
+                    real[n] = amp * Math.sin(phase);
+                    imag[n] = amp * Math.cos(phase);
+                }
+                return context.createPeriodicWave(real, imag);
+            }
+
+            function softClipCurve(drive) {
+                const curve = new Float32Array(2048);
+                for (let i = 0; i < curve.length; i++) {
+                    const x = (i / (curve.length - 1)) * 2 - 1;
+                    curve[i] = Math.tanh(drive * x) / Math.tanh(drive);
+                }
+                return curve;
+            }
+
+            function createEngine(context) {
+                const now = context.currentTime;
+
+                const master = context.createGain();
+                master.gain.value = 0;
+                master.connect(output);
+
+                const bellows = context.createGain();
+                bellows.gain.value = 1;
+                bellows.connect(master);
+
+                const nasal1 = context.createBiquadFilter();
+                nasal1.type = 'peaking';
+                nasal1.frequency.value = 1100;
+                nasal1.Q.value = 1.2;
+                nasal1.gain.value = 4;
+                const nasal2 = context.createBiquadFilter();
+                nasal2.type = 'peaking';
+                nasal2.frequency.value = 2700;
+                nasal2.Q.value = 1.6;
+                nasal2.gain.value = 2.5;
+                nasal1.connect(nasal2).connect(bellows);
+
+                const tone = context.createBiquadFilter();
+                tone.type = 'lowpass';
+                tone.Q.value = 0.6;
+                tone.connect(nasal1);
+
+                const buzz = context.createWaveShaper();
+                buzz.curve = softClipCurve(1.8);
+                buzz.oversample = '2x';
+                buzz.connect(tone);
+
+                // Everything feeds the buzz through here, so the drive can ease off as voices stack up
+                const mix = context.createGain();
+                mix.connect(buzz);
+
+                // Bellows: two slow LFOs at unrelated rates, so the movement never quite repeats
+                const lfoA = context.createOscillator();
+                lfoA.frequency.value = 0.11;
+                const lfoB = context.createOscillator();
+                lfoB.frequency.value = 0.067;
+                const ampDepth = context.createGain();
+                const filterDepth = context.createGain();
+                const filterDepthB = context.createGain();
+                lfoA.connect(ampDepth).connect(bellows.gain);
+                lfoA.connect(filterDepth).connect(tone.frequency);
+                lfoB.connect(filterDepthB).connect(tone.frequency);
+                lfoA.start(now);
+                lfoB.start(now);
+
+                // Air: looped noise through a band-pass
+                const noiseBuffer = context.createBuffer(1, context.sampleRate * 2, context.sampleRate);
+                const data = noiseBuffer.getChannelData(0);
+                const random = seededRandom(11);
+                for (let i = 0; i < data.length; i++) data[i] = random() * 2 - 1;
+                const noise = context.createBufferSource();
+                noise.buffer = noiseBuffer;
+                noise.loop = true;
+                const air = context.createBiquadFilter();
+                air.type = 'bandpass';
+                air.frequency.value = 1800;
+                air.Q.value = 0.7;
+                const airGain = context.createGain();
+                noise.connect(air).connect(airGain).connect(bellows);
+                noise.start(now);
+
+                const eng = { ctx: context, wave: reedWave(context), buzz, mix, master, tone, nasal2, ampDepth, filterDepth, filterDepthB, airGain, voices: {}, lastRoot: null };
+                // A spare reed bank for Mingle's wandering notes
+                eng.wanderers = WANDER_DETUNES.map(detunes => makeReeds(eng, detunes));
+                return eng;
+            }
+
+            // Three reeds -> level gain -> duck gain (Mingle dips a voice a touch while it's wandering) -> buzz
+            function makeReeds(eng, detunes) {
+                const c = eng.ctx;
+                const gain = c.createGain();
+                gain.gain.value = 0;
+                const duck = c.createGain();
+                gain.connect(duck).connect(eng.mix);
+                const oscillators = detunes.map((detune, r) => {
+                    const osc = c.createOscillator();
+                    osc.setPeriodicWave(eng.wave);
+                    osc.detune.value = detune;
+                    const reedGain = c.createGain();
+                    reedGain.gain.value = 0.11;
+                    const pan = c.createStereoPanner();
+                    pan.pan.value = [-0.45, 0, 0.45][r];
+                    osc.connect(reedGain).connect(pan).connect(gain);
+                    osc.start(c.currentTime);
+                    return osc;
+                });
+                return { gain, duck, oscillators, detunes, busyUntil: -1, sourceId: null };
+            }
+
+            // Voices are only built once they're first turned on, to spare the phone's processor
+            function voiceNodes(eng, voice) {
+                if (!eng.voices[voice.id]) eng.voices[voice.id] = makeReeds(eng, REED_DETUNES[VOICES.indexOf(voice)]);
+                return eng.voices[voice.id];
+            }
+
+            function levelOf(voice) {
+                return settings.voices[voice.id] ? settings.levels[voice.id] / 100 : 0;
+            }
+
+            // With lots of voices on, pull them all down together so the reeds don't pile into the buzz
+            function blendFactor() {
+                const total = VOICES.reduce((sum, voice) => sum + levelOf(voice), 0);
+                return Math.min(1, 1.9 / Math.max(total, 0.001));
+            }
+
+            // Tone: the top of the range opens up more gently than the bottom, so bright isn't harsh
+            // More voices means more overtones and more drive into the buzz, so a big stack turns harsh.
+            // Past two voices, each extra one eases the drive and darkens the tone a little.
+            function activeVoiceCount() {
+                return VOICES.filter(voice => levelOf(voice) > 0).length;
+            }
+
+            function stackDarkening() {
+                return Math.max(0.6, 1 - 0.07 * Math.max(0, activeVoiceCount() - 2));
+            }
+
+            function stackDrive() {
+                return 1 / (1 + 0.12 * Math.max(0, activeVoiceCount() - 2));
+            }
+
+            function toneCutoff() {
+                const t = settings.tone / 100;
+                const octaves = t <= 0.45 ? t * 4.2 : 1.89 + (t - 0.45) * 2.3;
+                return 450 * Math.pow(2, octaves) * stackDarkening();
+            }
+
+            function applyAll(eng, immediate) {
+                if (!eng) return;
+                const t = eng.ctx.currentTime;
+                const glide = immediate ? 0.001 : 0.04;
+                const root = rootFrequency();
+                const blend = blendFactor();
+
+                // A new key or tuning would leave any wandering note stranded, so let it go
+                if (eng.lastRoot && Math.abs(root / eng.lastRoot - 1) > 1e-6) releaseWanderers(eng);
+                eng.lastRoot = root;
+
+                VOICES.forEach(voice => {
+                    if (!settings.voices[voice.id] && !eng.voices[voice.id]) return;
+                    const { gain, oscillators } = voiceNodes(eng, voice);
+                    oscillators.forEach(osc => osc.frequency.setTargetAtTime(root * ratioOf(voice), t, glide));
+                    gain.gain.setTargetAtTime(levelOf(voice) * blend, t, immediate ? 0.001 : 0.12);
+                });
+
+                const cutoff = toneCutoff();
+                eng.mix.gain.setTargetAtTime(stackDrive(), t, immediate ? 0.001 : 0.12);
+                const breath = settings.breath / 100;
+                eng.tone.frequency.setTargetAtTime(cutoff, t, 0.08);
+                eng.nasal2.gain.setTargetAtTime(2.5 - Math.max(0, settings.tone - 45) / 55 * 3, t, 0.08);
+                // Breath is mostly shimmer: it spreads each voice's three reeds further apart in tuning,
+                // so they beat against each other faster and wider. The bellows sway stays gentle.
+                const spread = 0.35 + breath * 1.9;
+                [...Object.values(eng.voices), ...eng.wanderers].forEach(reeds => {
+                    reeds.oscillators.forEach((osc, i) => osc.detune.setTargetAtTime(reeds.detunes[i] * spread, t, immediate ? 0.001 : 0.3));
+                });
+                eng.ampDepth.gain.setTargetAtTime(breath * 0.05, t, 0.2);
+                eng.filterDepth.gain.setTargetAtTime(breath * cutoff * 0.1, t, 0.2);
+                eng.filterDepthB.gain.setTargetAtTime(breath * cutoff * 0.06, t, 0.2);
+                // Air rides with Tone: the brighter it gets, the more breath you hear in the reeds
+                eng.airGain.gain.setTargetAtTime((0.003 + (settings.tone / 100) * 0.008) * stackDrive(), t, 0.2);
+
+                if (eng === engine && playing) eng.master.gain.setTargetAtTime(volumeLevel(), t, 0.3);
+            }
+
+            function volumeLevel() {
+                // Part of the loudness the stack loses at the buzz comes back here, after it, where it adds no grit
+                return level * 0.9 * Math.sqrt(1 / stackDrive());
+            }
+
+            // ---- Mingle ----
+            // A spare reed bank fades in on top of an active voice at the same pitch (so you can't hear
+            // it arrive), takes a slow, gooey slide to a nearby dissonance, leans there briefly, slides
+            // home, and fades out. The voice it grew out of keeps playing, dipped just a little so the
+            // total loudness stays about even. One at a time, at random, spaced-out moments. The slider
+            // sets how loud the strays get as well as how often: half as loud at the bottom, full at the top.
+
+            // What each wandering grows out of, where it leans (as a ratio of the root), how often, and
+            // how loud the stray note gets next to its voice. The common ones are kept faint, a shadow
+            // rather than a second voice; the octave and tritone leans were too much at full strength.
+            const MINGLE_MOVES = [
+                { from: 'high', to: 15 / 8, weight: 1, level: 0.32 },        // octave leans down to the major 7th
+                { from: 'fifth', to: 45 / 32, weight: 0.8, level: 0.3 },     // 5th sinks to the tritone
+                { from: 'fourth', to: 45 / 32, weight: 0.8, level: 0.3 },    // 4th rises to the tritone
+                { from: 'tenth', to: 8 / 3, weight: 0.12, level: 0.45 },     // 10th lifts to the 11th
+                { from: 'root', to: 15 / 16, weight: 0.08, level: 0.4 },     // root dips a half step
+                { from: 'root', to: 9 / 8, weight: 0.08, level: 0.4 }        // root climbs a whole step
+            ];
+
+            // Frequency points for a slow-in, slow-out slide (even steps in pitch, not in Hz)
+            function glideCurve(from, to) {
+                const curve = new Float32Array(64);
+                for (let i = 0; i < curve.length; i++) {
+                    const x = i / (curve.length - 1);
+                    const ease = x * x * x * (x * (x * 6 - 15) + 10);
+                    curve[i] = from * Math.pow(to / from, ease);
+                }
+                return curve;
+            }
+
+            // Returns when the wandering will be over, or null if nothing could wander
+            function wander(eng, t0, rand) {
+                if (settings.mingle <= 0 || eng.wanderers.some(w => w.busyUntil > t0)) return null;
+                const moves = MINGLE_MOVES.filter(move => levelOf(VOICES.find(v => v.id === move.from)) > 0);
+                if (!moves.length) return null;
+                let pick = rand() * moves.reduce((sum, move) => sum + move.weight, 0);
+                const move = moves.find(m => (pick -= m.weight) <= 0) || moves[0];
+                const source = VOICES.find(v => v.id === move.from);
+                const wanderer = eng.wanderers[0];
+
+                const root = rootFrequency();
+                const from = root * ratioOf(source);
+                const target = root * move.to;
+                const fadeIn = 1.6;
+                const slide = 1.6 + rand() * 1.0;
+                const hang = 0.4 + rand() * 1.0;
+                const slideBack = slide * 1.1;
+                const fadeOut = 1.4;
+                const away = t0 + fadeIn * 0.85;
+                const back = away + slide + hang;
+                const home = back + slideBack;
+                const end = home + fadeOut;
+                const strength = move.level * (0.5 + 0.5 * settings.mingle / 100);
+                const level = levelOf(source) * blendFactor() * strength;
+                // Dip the source voice only as much as the stray note adds, so loudness holds steady
+                const dip = 1 - strength * 0.23;
+
+                wanderer.oscillators.forEach(osc => {
+                    osc.frequency.cancelScheduledValues(t0);
+                    osc.frequency.setValueAtTime(from, t0);
+                    osc.frequency.setValueCurveAtTime(glideCurve(from, target), away, slide);
+                    osc.frequency.setValueCurveAtTime(glideCurve(target, from), back, slideBack);
+                });
+                const g = wanderer.gain.gain;
+                g.cancelScheduledValues(t0);
+                g.setValueAtTime(0, t0);
+                g.linearRampToValueAtTime(level, t0 + fadeIn);
+                g.setValueAtTime(level, home);
+                g.linearRampToValueAtTime(0, end);
+
+                const duck = voiceNodes(eng, source).duck.gain;
+                duck.cancelScheduledValues(t0);
+                duck.setValueAtTime(1, t0);
+                duck.linearRampToValueAtTime(dip, t0 + fadeIn);
+                duck.setValueAtTime(dip, home);
+                duck.linearRampToValueAtTime(1, end);
+
+                wanderer.busyUntil = end;
+                wanderer.sourceId = source.id;
+                return end;
+            }
+
+            function releaseWanderers(eng) {
+                const t = eng.ctx.currentTime;
+                eng.wanderers.forEach(w => {
+                    if (w.busyUntil <= t) return;
+                    w.gain.gain.cancelScheduledValues(t);
+                    w.gain.gain.setTargetAtTime(0, t, 0.06);
+                    const source = eng.voices[w.sourceId];
+                    if (source) {
+                        source.duck.gain.cancelScheduledValues(t);
+                        source.duck.gain.setTargetAtTime(1, t, 0.06);
+                    }
+                    w.busyUntil = t + 0.4;
+                });
+            }
+
+            // Seconds of plain drone between wanderings: random (sometimes soon, sometimes a long
+            // while), averaging about 70s at the low end of the slider, 49s in the middle, and 18s at
+            // the top (the last stretch of the slider speeds up a little more)
+            function mingleGap(rand) {
+                const m = settings.mingle / 100;
+                const mean = 75 - 50 * m - 7 * Math.pow(m, 4);
+                return Math.max(6, -mean * Math.log(1 - rand() * 0.98));
+            }
+
+            let mingleTimer = null;
+
+            function scheduleMingle(wait) {
+                clearTimeout(mingleTimer);
+                if (!playing || !settings.mingle) return;
+                mingleTimer = setTimeout(() => {
+                    let next = mingleGap(Math.random);
+                    if (playing && engine && !document.hidden) {
+                        const now = engine.ctx.currentTime;
+                        const end = wander(engine, now + 0.05, Math.random);
+                        if (end) next += end - now;
+                    }
+                    scheduleMingle(next);
+                }, (wait === undefined ? mingleGap(Math.random) : wait) * 1000);
+            }
+
+            return {
+                start() {
+                    if (!engine) engine = createEngine(context);
+                    playing = true;
+                    applyAll(engine, true);
+                    const t = context.currentTime;
+                    engine.master.gain.cancelScheduledValues(t);
+                    engine.master.gain.setTargetAtTime(volumeLevel(), t, 1.2);
+                    scheduleMingle();
+                },
+                stop() {
+                    playing = false;
+                    clearTimeout(mingleTimer);
+                    if (!engine) return;
+                    releaseWanderers(engine);
+                    engine.master.gain.cancelScheduledValues(context.currentTime);
+                    engine.master.gain.setTargetAtTime(0, context.currentTime, 0.35);
+                },
+                set(changes) {
+                    const mingleWas = settings.mingle;
+                    if (changes.level !== undefined) level = changes.level;
+                    if (changes.voices) VOICES.forEach(v => settings.voices[v.id] = changes.voices.includes(v.id));
+                    ['tone', 'mingle'].forEach(name => { if (changes[name] !== undefined) settings[name] = changes[name]; });
+                    if (engine) {
+                        if (!settings.mingle) releaseWanderers(engine);
+                        applyAll(engine, false);
+                    }
+                    if (playing && !mingleWas !== !settings.mingle) scheduleMingle();
+                },
+                voiceCount: () => VOICES.filter(v => settings.voices[v.id]).length
+            };
         }
 
         // ---- The engine ----
@@ -607,12 +1114,21 @@
             return energy * mood;
         }
 
+        // How restless it is: Kindling carries this too, from lingering embers to a roaming bonfire
+        function restlessness() {
+            return 0.2 + 0.65 * settings.kindling;
+        }
+
+        // How many of each part to have going. With plenty of hum, the drone is the bed.
         function wantedCounts() {
             const has = role => stems.some(s => s.role === role);
-            const beds = has('bed') ? 1 : 0;
-            const rhythm = has('rhythm') && settings.kindling > 0.4 ? 1 : 0;
-            const layers = 2 + Math.round(settings.kindling * 4);
-            return { bed: beds, rhythm, tune: Math.max(1, layers - beds - rhythm) };
+            const k = settings.kindling;
+            return {
+                bed: has('bed') && settings.hum <= 0.5 ? 1 : 0,
+                low: has('low') && k > 0.12 ? 1 : 0,
+                rhythm: has('rhythm') ? (k > 0.62 ? 2 : k > 0.3 ? 1 : 0) : 0,
+                tune: Math.max(1, Math.round(1 + 2 * k))
+            };
         }
 
         function pickWeighted(list, weightOf) {
@@ -625,12 +1141,12 @@
             const live = voices.filter(v => !v.leaving);
             const used = new Set(live.map(v => v.stem.instrument));
             const counts = wantedCounts();
-            const w = settings.wander;
+            const w = restlessness();
             const loopTurn = n % index.bars === 0 ? 1.4 : 1;
-            const chance = { tune: 0.18 + 0.6 * w, bed: 0.04 + 0.16 * w, rhythm: 0.08 + 0.25 * w };
+            const chance = { tune: 0.18 + 0.6 * w, bed: 0.04 + 0.16 * w, low: 0.06 + 0.2 * w, rhythm: 0.08 + 0.25 * w };
             let changed = false;
 
-            for (const role of ['bed', 'rhythm', 'tune']) {
+            for (const role of ['bed', 'low', 'rhythm', 'tune']) {
                 const mine = live.filter(v => v.stem.role === role);
                 const candidates = stems.filter(s => s.role === role && !used.has(s.instrument) && bufferFor(s, clock.bpm));
                 const fresh = s => Math.pow(score(s), 2) * (n - s.lastHeard < 8 ? 0.35 : 1) + 1e-6;
@@ -674,7 +1190,7 @@
             const live = voices.filter(v => !v.leaving && v.stem.role !== 'bed' && n - v.joinedBar >= PHRASE);
             const resting = live.filter(v => v.restUntil > at).length;
             let room = Math.floor(voices.filter(v => !v.leaving).length / 3) - resting;
-            const chance = 0.06 + 0.22 * settings.wander;
+            const chance = 0.06 + 0.22 * restlessness();
             live.filter(v => !(v.restUntil > at)).forEach(voice => {
                 if (room <= 0 || Math.random() > chance) return;
                 const bar = clock.barTime;
@@ -689,7 +1205,8 @@
         function fadeBars(role, entering) {
             if (role === 'rhythm') return entering ? 1 : 2;
             if (role === 'bed') return 4;
-            return entering ? 2 + 2 * (1 - settings.wander) : 3;
+            if (role === 'low') return entering ? 1 : 2;
+            return entering ? 2 + 2 * (1 - restlessness()) : 3;
         }
 
         // A slow wobble for one of a voice's settings: a sine at a rate of its own, so no two
@@ -713,8 +1230,8 @@
         // sway) -> drift (wanders left and right) -> trim (evens out loudness) -> the mix.
         // How far they move follows Wander; beds move least, so the floor stays steady.
         function join(stem, n, at, fadeSeconds) {
-            const w = settings.wander;
-            const bed = stem.role === 'bed';
+            const w = restlessness();
+            const bed = stem.role === 'bed' || stem.role === 'low';
             const layer = ctx.createGain();
             const lilt = ctx.createGain();
             const tint = ctx.createBiquadFilter();
@@ -813,6 +1330,7 @@
             // Only when every voice (fading ones too) has its re-timed loop, so nothing falls out of step
             if (readyBpm !== null && readyBpm !== clock.bpm && voices.every(v => bufferFor(v.stem, readyBpm))) {
                 changeTempo(n, at, readyBpm);
+                prepare();
             }
             const phrase = n % PHRASE === 0;
             if (unsettled || phrase) {
@@ -842,15 +1360,17 @@
             if (playing) {
                 await ctx.resume();
                 const start = ctx.currentTime + 0.15;
-                const bpm = stems.every(s => bufferFor(s, readyBpm ?? index.bpm)) ? (readyBpm ?? index.bpm) : index.bpm;
+                // Start at the chosen tempo if the likely loops are ready for it, else where they were made
+                const ready = bpm => stems.some(s => s.role === 'tune' && bufferFor(s, bpm));
+                const bpm = readyBpm !== null && ready(readyBpm) ? readyBpm : index.bpm;
                 clock = { start, bar: 0, barTime: loopSeconds(bpm) / index.bars, bpm };
                 nextBar = 0;
                 voices = [];
-                // Open with a bed and one tune at once; the rest arrive a bar at a time
+                // Open with the hum, a bed if it wants one and one tune; the rest arrive a bar at a time
                 const counts = wantedCounts();
-                const opening = ['bed', 'tune'].map(role => stems.filter(s => s.role === role)).filter(list => list.length);
+                const opening = (counts.bed ? ['bed', 'tune'] : ['tune']).map(role => stems.filter(s => s.role === role && bufferFor(s, bpm))).filter(list => list.length);
                 opening.forEach(list => join(pickWeighted(list, s => Math.pow(score(s), 2) + 1e-6), 0, start, 0.01));
-                if (!counts.bed && !opening.length) join(stems[0], 0, start, 0.01);
+                drone.start();
                 nextBar = 1;
                 unsettled = true;
                 master.gain.cancelScheduledValues(ctx.currentTime);
@@ -865,6 +1385,7 @@
                 master.gain.cancelScheduledValues(t);
                 master.gain.setValueAtTime(master.gain.value, t);
                 master.gain.linearRampToValueAtTime(0, t + 1.2);
+                drone.stop();
                 const stopping = voices;
                 voices = [];
                 setTimeout(() => {
@@ -903,6 +1424,9 @@
             unsettled = true;
             if (name === 'gait') requestTempo();
             if (name === 'hour') applyShade(false);
+            if (name !== 'gait') prepare();
+            tuneDrone();
+            renderNow();
         }
 
         // ---- Picture ----
@@ -948,6 +1472,16 @@
             paint.fillRect(0, 0, canvas.width, canvas.height);
 
             paint.globalCompositeOperation = 'multiply';
+            // The hum: soft rings, one per voice, breathing slowly from the middle
+            const humVoices = playing && drone ? drone.voiceCount() : 0;
+            for (let i = 0; i < humVoices; i++) {
+                const r = R * (0.2 + 0.13 * i + 0.02 * Math.sin(wall * 0.5 + i * 1.3));
+                paint.strokeStyle = `rgba(176, 125, 42, ${0.1 + 0.05 * settings.hum})`;
+                paint.lineWidth = R * 0.05;
+                paint.beginPath();
+                paint.arc(R, R, r, 0, Math.PI * 2);
+                paint.stroke();
+            }
             const beatTime = clock ? clock.barTime / index.beatsPerBar : 1;
             const beat = clock && playing ? ((now - clock.start) / beatTime % 1 + 1) % 1 : 0.5;
             const shown = playing ? voices : [];
@@ -960,6 +1494,9 @@
                 let radius;
                 if (stem.role === 'bed') {
                     radius = R * (0.62 + 0.04 * Math.sin(wall * 0.3));
+                } else if (stem.role === 'low') {
+                    y = R * (1.5 + 0.04 * Math.sin(wall * 0.25));
+                    radius = R * 0.55;
                 } else if (stem.role === 'rhythm') {
                     const a = stem.angle + wall * 0.05;
                     x += Math.cos(a) * R * 0.5;
@@ -973,7 +1510,7 @@
                     radius = R * (0.3 + 0.05 * Math.sin(wall * 0.4 + stem.angle * 3));
                 }
                 const blot = paint.createRadialGradient(x, y, 0, x, y, radius);
-                const alpha = Math.round(level * (stem.role === 'bed' ? 120 : 215)).toString(16).padStart(2, '0');
+                const alpha = Math.round(Math.min(1, level) * (stem.role === 'bed' || stem.role === 'low' ? 120 : 215)).toString(16).padStart(2, '0');
                 blot.addColorStop(0, stem.color + alpha);
                 blot.addColorStop(1, stem.color + '00');
                 paint.fillStyle = blot;
@@ -1002,13 +1539,14 @@
 
         // What's playing, quietly: bed first, then the rest
         function renderNow() {
-            const order = { bed: 0, rhythm: 1, tune: 2 };
+            const order = { bed: 0, low: 1, rhythm: 2, tune: 3 };
             const names = playing ? voices.filter(v => !v.leaving).sort((a, b) => order[a.stem.role] - order[b.stem.role]).map(v => v.stem.instrument) : [];
+            if (playing && drone && drone.voiceCount()) names.unshift('hum');
             setText('now', names.join(' · '));
         }
 
         function render() {
-            ['kindling', 'hour', 'gait', 'wander'].forEach(name => {
+            ['kindling', 'hour', 'gait', 'hum'].forEach(name => {
                 document.getElementById(name).value = Math.round((settings[name] ?? 0.5) * 1000);
             });
         }

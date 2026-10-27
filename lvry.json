@@ -1,0 +1,11 @@
+{
+  "bars": 16,
+  "beatsPerBar": 4,
+  "tempoRange": [60, 120],
+  "moods": ["dusky", "misty", "calm", "warm", "bright"],
+  "beds": ["drone", "pad"],
+  "lows": ["sub", "bass"],
+  "rhythm": ["drums", "hats", "perc", "shaker", "bodhran", "bones", "spoons"],
+  "drone": { "key": "D", "octave": 3 },
+  "targetLufs": -20
+}

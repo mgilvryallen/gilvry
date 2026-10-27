@@ -1,6 +1,6 @@
 // Offline support: the page from the network when it can, everything else from cache.
 // Bump CACHE when files are added or removed.
-const CACHE = 'gilvry-v1';
+const CACHE = 'lvry-v1';
 const FILES = [
     './',
     'index.html',
@@ -21,7 +21,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
     event.waitUntil(
         // All the apps share one origin (mgilvryallen.github.io), so only clear this app's old caches
-        caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('gilvry-') && key !== CACHE).map(key => caches.delete(key))))
+        caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('lvry-') && key !== CACHE).map(key => caches.delete(key))))
     );
     self.clients.claim();
 });

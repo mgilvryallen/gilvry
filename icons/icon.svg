@@ -3,12 +3,28 @@
   <rect x="4" y="4" width="56" height="56" rx="11" fill="none" stroke="#4a3f2f" stroke-width="1.6"/>
   <rect x="7.5" y="7.5" width="49" height="49" rx="8" fill="none" stroke="#8b7759" stroke-width="0.9"/>
   <g fill="#3d5a42"><circle cx="12.6" cy="12.6" r="1.4"/><circle cx="51.4" cy="12.6" r="1.4"/><circle cx="12.6" cy="51.4" r="1.4"/><circle cx="51.4" cy="51.4" r="1.4"/></g>
-  <circle cx="32" cy="32" r="17.5" fill="#fffdf7" stroke="#4a3f2f" stroke-width="1.2"/>
-  <circle cx="32" cy="32" r="15" fill="none" stroke="#b07d2a" stroke-width="0.8"/>
-  <g fill="none" stroke-linecap="round" stroke-width="2.4">
-    <path d="M19.5 26 C 23 22.5, 26.5 22.5, 30 26 S 37 29.5, 44.5 26" stroke="#a0522d"/>
-    <path d="M18 32 C 21.5 28.5, 25 28.5, 28.5 32 S 35.5 35.5, 46 32" stroke="#3e5f8a"/>
-    <path d="M19.5 38 C 23 34.5, 26.5 34.5, 30 38 S 37 41.5, 44.5 38" stroke="#6b7a3a"/>
+  <rect x="16.5" y="15.5" width="27" height="2.6" rx="1" fill="#4a3f2f"/>
+  <rect x="21.5" y="10" width="17" height="6" rx="1" fill="#4a3f2f"/>
+  <rect x="21.5" y="13.6" width="17" height="1.4" fill="#b07d2a"/>
+  <g transform="rotate(6 30 24)">
+    <rect x="20" y="18" width="20" height="13" rx="2" fill="#c9bda5" stroke="#4a3f2f" stroke-width="1"/>
+    <circle cx="25.5" cy="23.8" r="2.3" fill="#fffdf7" stroke="#4a3f2f" stroke-width="0.9"/><circle cx="26" cy="24.2" r="0.9" fill="#4a3f2f"/>
+    <circle cx="34.5" cy="23.8" r="2.3" fill="#fffdf7" stroke="#4a3f2f" stroke-width="0.9"/><circle cx="35" cy="24.2" r="0.9" fill="#4a3f2f"/>
+    <path d="M27 28 q3 1.6 6 0" fill="none" stroke="#4a3f2f" stroke-width="1" stroke-linecap="round"/>
   </g>
-  <g fill="#8b7759"><path d="M32 8.8 l2 2.6 l-2 2.6 l-2 -2.6 Z"/><path d="M32 50 l2 2.6 l-2 2.6 l-2 -2.6 Z"/></g>
+  <rect x="28" y="31" width="4" height="2" fill="#4a3f2f"/>
+  <rect x="17.5" y="33" width="25" height="17" rx="2" fill="#a0522d" stroke="#4a3f2f" stroke-width="1"/>
+  <circle cx="30" cy="42" r="4.6" fill="none" stroke="#f7f3e9" stroke-opacity="0.75" stroke-width="1"/>
+  <g fill="#f7f3e9" fill-opacity="0.75"><circle cx="30" cy="42" r="1.2"/><circle cx="21" cy="36.5" r="0.9"/><circle cx="21" cy="46.5" r="0.9"/></g>
+  <g fill="none" stroke="#4a3f2f" stroke-width="1.3" stroke-linecap="round"><path d="M17.5 41.5 h-3"/></g>
+  <path d="M14.5 41.5 l-2.2 -2.4 v4.8 Z M14.5 41.5" fill="#b07d2a" stroke="#4a3f2f" stroke-width="0.7" stroke-linejoin="round"/>
+  <g transform="translate(3 3) rotate(42 41 34)">
+    <path d="M41 26 C 37 26, 36.4 28.4, 37.6 30.2 C 38.2 31.1, 38.2 31.7, 37.3 32.6 C 35.2 34.4, 35.5 39.5, 41 40.1 C 46.5 39.5, 46.8 34.4, 44.7 32.6 C 43.8 31.7, 43.8 31.1, 44.4 30.2 C 45.6 28.4, 45 26, 41 26 Z" fill="#b07d2a" stroke="#4a3f2f" stroke-width="0.9"/>
+    <rect x="40.2" y="17.5" width="1.6" height="15" rx="0.6" fill="#4a3f2f"/>
+    <circle cx="41" cy="17" r="1.3" fill="none" stroke="#4a3f2f" stroke-width="0.9"/>
+    <g fill="none" stroke="#4a3f2f" stroke-width="0.6" stroke-linecap="round"><path d="M38.9 33 c-0.6 0.9, -0.6 2.1, 0 3"/><path d="M43.1 33 c0.6 0.9, 0.6 2.1, 0 3"/></g>
+  </g>
+  <path d="M38.5 30 L54 46" stroke="#4a3f2f" stroke-width="1.1" stroke-linecap="round"/>
+  <path d="M39.2 29.5 L54.6 45.4" stroke="#c9bda5" stroke-width="0.5" stroke-linecap="round"/>
+  <path d="M42.5 46 h5.5 l3 -1.5" fill="none" stroke="#4a3f2f" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

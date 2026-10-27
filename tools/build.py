@@ -1,4 +1,4 @@
-"""Turn the stems/ folder into what Gilvry plays: loops/*.mp3 and loops/index.json.
+"""Turn the stems/ folder into what Lvry plays: loops/*.mp3 and loops/index.json.
 
 Takes WAV, AIFF, FLAC, MP3, M4A/AAC, OGG/Opus or CAF, any sample rate or bit depth, mono or
 stereo. Each stem is checked against the others' length, measured for loudness (so they can be
@@ -7,7 +7,7 @@ start after it. MP3s carry a sliver of silence at the start that differs by brow
 loop wrapped around itself, the app can cut out an exact, seamless loop whatever that sliver is.
 
 Names: instrument_e1_mood_01.wav (energy 1 to 3, take number optional), for example
-fiddle_e3_bright_01.wav. Settings are in gilvry.json.
+fiddle_e3_bright_01.wav. Settings are in lvry.json.
 
 python3 tools/build.py [out_dir]   (default: loops; needs ffmpeg)
 """
@@ -59,14 +59,14 @@ def main():
     root = Path(__file__).resolve().parent.parent
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else root / 'loops'
     out.mkdir(parents=True, exist_ok=True)
-    config = json.loads((root / 'gilvry.json').read_text())
+    config = json.loads((root / 'lvry.json').read_text())
     warnings = []
 
     found = []
     for path in sorted((root / 'stems').iterdir()):
         if path.name.startswith('.') or path.suffix.lower() not in AUDIO:
             if path.is_file() and not path.name.startswith('.') and path.name.lower() != 'readme.md':
-                warnings.append(f'{path.name}: not an audio file Gilvry knows, skipped.')
+                warnings.append(f'{path.name}: not an audio file Lvry knows, skipped.')
             continue
         match = NAME.match(path.stem)
         if not match:
@@ -106,7 +106,7 @@ def main():
             continue
         names.add(name)
         if mood not in config['moods']:
-            warnings.append(f'{path.name}: the mood "{mood}" isn\'t in gilvry.json\'s moods list, so it sits in the middle.')
+            warnings.append(f'{path.name}: the mood "{mood}" isn\'t in lvry.json\'s moods list, so it sits in the middle.')
 
         digest = hashlib.sha1(BUILD_VERSION.encode() + path.read_bytes()).hexdigest()[:10]
         lufs = loudness(audio)
@@ -114,7 +114,8 @@ def main():
         file = f'{name}.{digest}.mp3'
         if not (out / file).exists():
             encode(audio, out / file)
-        role = 'bed' if instrument in config['beds'] else 'rhythm' if instrument in config['rhythm'] else 'tune'
+        role = ('bed' if instrument in config['beds'] else 'low' if instrument in config.get('lows', [])
+                else 'rhythm' if instrument in config['rhythm'] else 'tune')
         stems.append({'file': file, 'name': name, 'instrument': instrument, 'energy': energy, 'mood': mood,
                       'role': role, 'gain': round(gain, 2), 'lufs': None if lufs is None else round(lufs, 1)})
         print(f'{name}: {"" if lufs is None else f"{lufs:.1f} LUFS, "}gain {gain:+.1f} dB')
@@ -128,7 +129,7 @@ def main():
     bpm = config['bars'] * config['beatsPerBar'] * 60 * SR / frames
     index = {'bpm': round(bpm, 3), 'bars': config['bars'], 'beatsPerBar': config['beatsPerBar'],
              'tempoRange': config['tempoRange'], 'moods': config['moods'], 'sampleRate': SR, 'frames': frames,
-             'pad': PAD, 'stems': stems, 'warnings': warnings}
+             'pad': PAD, 'drone': config.get('drone', {'key': 'D', 'octave': 3}), 'stems': stems, 'warnings': warnings}
     (out / 'index.json').write_text(json.dumps(index, indent=1))
     print(f'{len(stems)} stems, {frames / SR:.3f}s loops, {bpm:.2f} bpm')
     for w in warnings:
@@ -137,7 +138,7 @@ def main():
     summary = os.environ.get('GITHUB_STEP_SUMMARY')
     if summary:
         with open(summary, 'a') as f:
-            f.write(f'### Gilvry: {len(stems)} stems, {bpm:.1f} bpm\n\n')
+            f.write(f'### Lvry: {len(stems)} stems, {bpm:.1f} bpm\n\n')
             f.write('\n'.join(f'- {s["name"]} ({s["role"]}, {s["lufs"]} LUFS)' for s in stems) + '\n')
             if warnings:
                 f.write('\n**Warnings**\n\n' + '\n'.join(f'- {w}' for w in warnings) + '\n')
