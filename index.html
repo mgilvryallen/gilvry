@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Gilvry</title>
+    <meta name="description" content="Folk loops that layer and wander on their own, steered by a few mysterious sliders.">
+    <meta name="theme-color" content="#f7f3e9">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Gilvry">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="icons/icon-180.png">
+    <style>
+        @font-face {
+            font-family: 'Rug Pull';
+            src: url('fonts/TAYRugPull.otf') format('opentype');
+            font-display: swap;
+        }
+
+        @font-face {
+            font-family: 'Lumios Typewriter';
+            src: url('fonts/LumiosTypewriter-Old.ttf') format('truetype');
+            font-display: swap;
+        }
+
+        :root {
+            --parchment: #f7f3e9;
+            --paper: #fffdf7;
+            --ink: #2c2416;
+            --heading: #4a3f2f;
+            --green: #3d5a42;
+            --tan: #8b7759;
+            --light-tan: #c9bda5;
+            --muted: #6b5d4f;
+            --rust: #a0522d;
+            --ochre: #b07d2a;
+            --woad: #3e5f8a;
+            --indigo: #34466e;
+            --plum: #7b4b6a;
+            --teal: #2f6f6b;
+            --slate: #586878;
+            --berry: #94404f;
+            --moss: #6b7a3a;
+        }
+
+        [hidden] {
+            display: none !important;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Rebalance lines so text never ends on one lonely word, and headings break evenly */
+        p, label, .hint {
+            text-wrap: pretty;
+        }
+
+        h1, h2 {
+            text-wrap: balance;
+        }
+
+        body {
+            font-family: 'Lumios Typewriter', Georgia, serif;
+            font-size: 17px;
+            line-height: 1.6;
+            color: var(--ink);
+            background-color: var(--parchment);
+            background-image: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(139, 119, 89, 0.02) 2px, rgba(139, 119, 89, 0.02) 4px);
+            padding: calc(16px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 440px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin: 10px 0 24px;
+        }
+
+        header img {
+            width: 56px;
+            height: 56px;
+        }
+
+        h1 {
+            font-family: 'Rug Pull', Georgia, serif;
+            font-weight: normal;
+            font-size: 40px;
+            letter-spacing: 1px;
+            color: var(--heading);
+            line-height: 1.1;
+        }
+
+        h2 {
+            font-family: 'Rug Pull', Georgia, serif;
+            font-weight: normal;
+            font-size: 22px;
+            color: var(--accent, var(--heading));
+            margin-bottom: 12px;
+        }
+
+        .card {
+            background: var(--paper);
+            border: 1px solid var(--light-tan);
+            border-top: 4px solid var(--accent, var(--light-tan));
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        a {
+            color: var(--green);
+        }
+
+        /* ---- Player ---- */
+
+        .player {
+            text-align: center;
+        }
+
+        .stage {
+            position: relative;
+            width: 100%;
+            max-width: 320px;
+            aspect-ratio: 1;
+            margin: 0 auto;
+        }
+
+        .stage canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            box-shadow: 0 0 0 1px var(--light-tan), 0 0 0 6px var(--paper), 0 0 0 7.5px var(--ochre);
+        }
+
+        .play-btn {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 96px;
+            height: 96px;
+            transform: translate(-50%, -50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: var(--rust);
+            color: var(--parchment);
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 0 0 4px var(--paper), 0 0 0 5.5px var(--ochre);
+            transition: opacity 1.2s, transform 1.2s, background 0.3s;
+        }
+
+        .play-btn svg {
+            width: 38px;
+            height: 38px;
+            fill: currentColor;
+        }
+
+        .play-btn:hover {
+            background: #8a4524;
+        }
+
+        .play-btn:disabled {
+            background: var(--light-tan);
+            cursor: default;
+        }
+
+        /* While playing, the button steps back so the picture can be seen; it comes forward on hover */
+        .playing .play-btn {
+            background: var(--green);
+            opacity: 0.22;
+            transform: translate(-50%, -50%) scale(0.7);
+        }
+
+        .playing .play-btn:hover,
+        .playing .play-btn:focus-visible {
+            opacity: 0.9;
+        }
+
+        .play-label {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 15px;
+            color: var(--muted);
+            margin-top: 18px;
+        }
+
+        .now {
+            margin-top: 6px;
+            min-height: 1.6em;
+            color: var(--tan);
+            font-size: 14px;
+            transition: opacity 0.8s;
+        }
+
+        /* ---- Sliders ---- */
+
+        .slider-row {
+            margin-bottom: 18px;
+        }
+
+        .slider-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .slider-name {
+            font-family: 'Rug Pull', Georgia, serif;
+            font-size: 17px;
+            letter-spacing: 0.5px;
+            color: var(--row, var(--heading));
+        }
+
+        .slider-ends {
+            display: flex;
+            justify-content: space-between;
+            color: var(--tan);
+            font-size: 13px;
+            margin-top: -2px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 32px;
+            accent-color: var(--row, var(--green));
+        }
+
+        .hint {
+            color: var(--muted);
+            font-size: 14px;
+            margin-top: 14px;
+        }
+
+        .credit {
+            text-align: center;
+            margin-top: 24px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <img src="icons/icon.svg" alt="">
+            <h1>Gilvry</h1>
+        </header>
+
+        <div class="card player" id="player" style="--accent: var(--rust)">
+            <div class="stage">
+                <canvas id="canvas" aria-hidden="true"></canvas>
+                <button class="play-btn" id="playBtn" onclick="togglePlay()" aria-label="Play" disabled></button>
+            </div>
+            <div class="play-label" id="playLabel">gathering the loops…</div>
+            <div class="now" id="now"></div>
+        </div>
+
+        <div class="card" style="--accent: var(--plum)">
+            <div class="slider-row" style="--row: var(--rust)">
+                <div class="slider-name">Kindling</div>
+                <input type="range" id="kindling" min="0" max="1000" oninput="setSetting('kindling', this.value / 1000)" aria-label="Kindling">
+                <div class="slider-ends"><span>embers</span><span>bonfire</span></div>
+            </div>
+            <div class="slider-row" style="--row: var(--indigo)">
+                <div class="slider-name">Hour</div>
+                <input type="range" id="hour" min="0" max="1000" oninput="setSetting('hour', this.value / 1000)" aria-label="Hour">
+                <div class="slider-ends"><span>dusk</span><span>dawn</span></div>
+            </div>
+            <div class="slider-row" style="--row: var(--moss)">
+                <div class="slider-name">Gait</div>
+                <input type="range" id="gait" min="0" max="1000" oninput="setSetting('gait', this.value / 1000)" aria-label="Gait">
+                <div class="slider-ends"><span>amble</span><span>scurry</span></div>
+            </div>
+            <div class="slider-row" style="--row: var(--teal)">
+                <div class="slider-name">Wander</div>
+                <input type="range" id="wander" min="0" max="1000" oninput="setSetting('wander', this.value / 1000)" aria-label="Wander">
+                <div class="slider-ends"><span>linger</span><span>roam</span></div>
+            </div>
+        </div>
+
+        <div class="credit">
+            Made by <a href="https://mgilvryallen.com" target="_blank">M'Gilvry Allen</a><br><a href="https://github.com/mgilvryallen/gilvry" target="_blank">make your own copy</a>
+        </div>
+    </div>
+
+    <script>
+        const SETTINGS_KEY = 'gilvrySettings';
+        const DEFAULTS = { kindling: 0.35, hour: 0.5, gait: null, wander: 0.4 };
+        const PHRASE = 4; // bars between the engine's chances to change its mind
+
+        function loadSettings() {
+            try {
+                return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
+            } catch (e) {
+                return { ...DEFAULTS };
+            }
+        }
+
+        function saveSettings() {
+            try {
+                localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+            } catch (e) {}
+        }
+
+        const settings = loadSettings();
+
+        // ---- Loading ----
+        // loops/index.json (made by tools/build.py) lists the stems. Each MP3 holds its loop with a
+        // little wrap-around on both sides; cutting out the middle gives an exact, seamless loop.
+
+        let index = null;
+        let ctx = null;
+        let stems = [];
+
+        async function loadAll() {
+            ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' });
+            index = await (await fetch('loops/index.json')).json();
+            if (settings.gait === null) settings.gait = gaitFor(index.bpm);
+            render();
+            let done = 0;
+            const queue = [...index.stems];
+            const load = async () => {
+                while (queue.length) {
+                    const meta = queue.shift();
+                    try {
+                        const data = await (await fetch('loops/' + meta.file)).arrayBuffer();
+                        const decoded = await new Promise((resolve, reject) => ctx.decodeAudioData(data, resolve, reject));
+                        stems.push(makeStem(meta, exactLoop(decoded)));
+                    } catch (e) {
+                        console.warn('Could not load', meta.file, e);
+                    }
+                    setText('playLabel', `gathering the loops… ${++done} of ${index.stems.length}`);
+                }
+            };
+            await Promise.all([load(), load(), load()]);
+            stems.sort((a, b) => a.name.localeCompare(b.name));
+            pruneOldLoops();
+            buildGraph();
+            document.getElementById('playBtn').disabled = !stems.length;
+            setText('playLabel', stems.length ? 'tap to play' : 'no loops found');
+            renderPlayer();
+            requestTempo();
+        }
+
+        function exactLoop(decoded) {
+            const rate = ctx.sampleRate / index.sampleRate;
+            const start = Math.round(index.pad * rate);
+            const length = Math.round(index.frames * rate);
+            const buffer = ctx.createBuffer(decoded.numberOfChannels, length, ctx.sampleRate);
+            for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
+                buffer.copyToChannel(decoded.getChannelData(ch).subarray(start, start + length), ch);
+            }
+            return buffer;
+        }
+
+        function makeStem(meta, buffer) {
+            const moods = index.moods;
+            const place = moods.indexOf(meta.mood);
+            return {
+                ...meta, original: buffer, buffers: new Map(),
+                energyAt: (meta.energy - 1) / 2,
+                moodAt: place < 0 ? 0.5 : place / Math.max(1, moods.length - 1),
+                color: colorFor(meta.instrument), angle: hash(meta.instrument) % 628 / 100,
+                lastHeard: -1e9
+            };
+        }
+
+        // Replaced stems get new file names, so old copies in the offline cache can go
+        async function pruneOldLoops() {
+            if (!('caches' in window)) return;
+            const current = new Set(index.stems.map(s => s.file));
+            for (const key of await caches.keys()) {
+                if (!key.startsWith('gilvry-')) continue;
+                const cache = await caches.open(key);
+                for (const request of await cache.keys()) {
+                    const file = decodeURIComponent(request.url.split('/loops/')[1] || '');
+                    if (file.endsWith('.mp3') && !current.has(file)) cache.delete(request);
+                }
+            }
+        }
+
+        // ---- Tempo ----
+        // Gait changes the tempo without changing the pitch. A worker re-times each loop (WSOLA:
+        // it re-lays the sound in short overlapping slices, each nudged to line up with the last),
+        // treating the loop as a circle so the result still loops seamlessly. The new versions
+        // take over together, on a bar line.
+
+        function gaitFor(bpm) {
+            const [low, high] = index.tempoRange;
+            return Math.max(0, Math.min(1, (bpm - low) / (high - low)));
+        }
+
+        function gaitBpm() {
+            const [low, high] = index.tempoRange;
+            return Math.round((low + settings.gait * (high - low)) * 2) / 2;
+        }
+
+        // Every loop at a given tempo has the same length, in seconds
+        function loopSeconds(bpm) {
+            return Math.round(stems[0].original.length * index.bpm / bpm) / ctx.sampleRate;
+        }
+
+        function bufferFor(stem, bpm) {
+            return Math.abs(bpm - index.bpm) < 0.01 ? stem.original : stem.buffers.get(bpm) || null;
+        }
+
+        function wsolaWorker() {
+            const W = 4096;
+            const HOP = W / 2;
+            const SEARCH = 512;
+            const DOWN = 4;
+            const window = new Float32Array(W).map((_, i) => 0.5 - 0.5 * Math.cos(2 * Math.PI * i / W));
+
+            self.onmessage = event => {
+                const { id, channels, outLength } = event.data;
+                const L = channels[0].length;
+                const M = outLength;
+                const frames = Math.max(2, Math.round(M / HOP));
+                // A quarter-rate mono copy, for finding where the slices line up
+                const small = new Float32Array(Math.ceil(L / DOWN));
+                for (let i = 0; i < small.length; i++) {
+                    let sum = 0;
+                    for (let ch = 0; ch < channels.length; ch++) for (let j = 0; j < DOWN; j++) sum += channels[ch][(i * DOWN + j) % L];
+                    small[i] = sum;
+                }
+                const S = small.length;
+                const overlap = HOP / DOWN;
+                const reach = SEARCH / DOWN;
+
+                const out = channels.map(() => new Float32Array(M));
+                const weight = new Float32Array(M);
+                let previous = 0;
+                for (let k = 0; k < frames; k++) {
+                    const outAt = Math.round(k * M / frames);
+                    const nominal = Math.round(k * L / frames);
+                    let from = 0;
+                    if (k > 0) {
+                        // Where the last slice would naturally have carried on to
+                        const hop = outAt - Math.round((k - 1) * M / frames);
+                        const natural = Math.round((previous + hop) / DOWN);
+                        let best = -Infinity;
+                        let bestShift = 0;
+                        for (let shift = -reach; shift <= reach; shift++) {
+                            const start = Math.round(nominal / DOWN) + shift;
+                            let score = 0;
+                            for (let i = 0; i < overlap; i += 2) {
+                                score += small[((natural + i) % S + S) % S] * small[((start + i) % S + S) % S];
+                            }
+                            if (score > best) {
+                                best = score;
+                                bestShift = shift;
+                            }
+                        }
+                        from = ((nominal + bestShift * DOWN) % L + L) % L;
+                    }
+                    for (let ch = 0; ch < channels.length; ch++) {
+                        const input = channels[ch];
+                        const output = out[ch];
+                        for (let i = 0; i < W; i++) output[(outAt + i) % M] += window[i] * input[(from + i) % L];
+                    }
+                    for (let i = 0; i < W; i++) weight[(outAt + i) % M] += window[i];
+                    previous = from;
+                }
+                for (let i = 0; i < M; i++) {
+                    const w = weight[i] > 1e-3 ? 1 / weight[i] : 0;
+                    for (let ch = 0; ch < out.length; ch++) out[ch][i] *= w;
+                }
+                self.postMessage({ id, channels: out }, out.map(c => c.buffer));
+            };
+        }
+
+        const worker = new Worker(URL.createObjectURL(new Blob([`(${wsolaWorker.toString()})()`], { type: 'text/javascript' })));
+        const jobs = new Map();
+        let jobId = 0;
+        worker.onmessage = event => {
+            const job = jobs.get(event.data.id);
+            jobs.delete(event.data.id);
+            job(event.data.channels);
+        };
+
+        function stretch(stem, bpm) {
+            if (bufferFor(stem, bpm)) return Promise.resolve(bufferFor(stem, bpm));
+            if (!stem.pending) stem.pending = new Map();
+            if (stem.pending.has(bpm)) return stem.pending.get(bpm);
+            const original = stem.original;
+            const outLength = Math.round(loopSeconds(bpm) * ctx.sampleRate);
+            const channels = Array.from({ length: original.numberOfChannels }, (_, ch) => original.getChannelData(ch).slice());
+            const promise = new Promise(resolve => {
+                const id = ++jobId;
+                jobs.set(id, out => {
+                    const buffer = ctx.createBuffer(out.length, outLength, ctx.sampleRate);
+                    out.forEach((data, ch) => buffer.copyToChannel(data, ch));
+                    stem.buffers.set(bpm, buffer);
+                    stem.pending.delete(bpm);
+                    resolve(buffer);
+                });
+                worker.postMessage({ id, channels, outLength }, channels.map(c => c.buffer));
+            });
+            stem.pending.set(bpm, promise);
+            return promise;
+        }
+
+        let wantedBpm = null;
+        let readyBpm = null;
+        let tempoTimer = null;
+
+        function requestTempo() {
+            clearTimeout(tempoTimer);
+            tempoTimer = setTimeout(async () => {
+                const bpm = gaitBpm();
+                if (bpm === wantedBpm) return;
+                wantedBpm = bpm;
+                // What's playing first, so the change can be heard soon; then the rest, in the background
+                const playingNow = voices.filter(v => !v.leaving).map(v => v.stem);
+                await Promise.all(playingNow.map(stem => stretch(stem, bpm)));
+                if (wantedBpm !== bpm) return;
+                readyBpm = bpm;
+                for (const stem of stems) {
+                    if (wantedBpm !== bpm) return;
+                    await stretch(stem, bpm);
+                }
+                // Keep only the versions in use
+                const keep = new Set([bpm, clock && clock.bpm]);
+                stems.forEach(stem => [...stem.buffers.keys()].forEach(key => { if (!keep.has(key)) stem.buffers.delete(key); }));
+            }, 250);
+        }
+
+        // ---- Sound ----
+
+        let master = null;
+        let mix = null;
+        let shade = null;
+
+        // A soft room, made from decaying noise
+        function makeRoom(seconds) {
+            const length = Math.round(ctx.sampleRate * seconds);
+            const impulse = ctx.createBuffer(2, length, ctx.sampleRate);
+            let seed = 7;
+            for (let ch = 0; ch < 2; ch++) {
+                const data = impulse.getChannelData(ch);
+                for (let i = 0; i < length; i++) {
+                    seed = (seed * 16807) % 2147483647;
+                    data[i] = ((seed - 1) / 2147483646 * 2 - 1) * Math.pow(1 - i / length, 3.2);
+                }
+            }
+            return impulse;
+        }
+
+        function buildGraph() {
+            const compressor = ctx.createDynamicsCompressor();
+            compressor.threshold.value = -16;
+            compressor.ratio.value = 3;
+            master = ctx.createGain();
+            master.gain.value = 0;
+            master.connect(compressor).connect(ctx.destination);
+            // Hour also shades the whole sound: darker at dusk, open at dawn
+            shade = ctx.createBiquadFilter();
+            shade.type = 'lowpass';
+            shade.Q.value = 0.5;
+            shade.connect(master);
+            mix = ctx.createGain();
+            mix.gain.value = 0.55;
+            const room = ctx.createConvolver();
+            room.buffer = makeRoom(2.8);
+            const wet = ctx.createGain();
+            wet.gain.value = 0.22;
+            mix.connect(shade);
+            mix.connect(room).connect(wet).connect(shade);
+            applyShade(true);
+        }
+
+        function applyShade(immediate) {
+            if (!shade) return;
+            const cutoff = 2600 * Math.pow(2, settings.hour * 2.8);
+            shade.frequency.setTargetAtTime(cutoff, ctx.currentTime, immediate ? 0.01 : 0.6);
+        }
+
+        // ---- The engine ----
+        // Everything runs off one clock, in bars. Every voice is a stem looping in time with the
+        // rest; voices only start and stop on bar lines. Every few bars the engine looks at what's
+        // playing against the sliders and may bring a layer in or let one go. Wander sets how often.
+
+        let voices = [];
+        let clock = null;      // { start, bar, barTime, bpm }: bar number `bar` begins at time `start`
+        let nextBar = 0;
+        let unsettled = true;  // a slider moved: look again every bar until things settle
+        let ticker = null;
+        let playing = false;
+
+        function barStart(n) {
+            return clock.start + (n - clock.bar) * clock.barTime;
+        }
+
+        function score(stem) {
+            const energy = Math.exp(-Math.pow((stem.energyAt - settings.kindling) / 0.38, 2));
+            const mood = Math.exp(-Math.pow((stem.moodAt - settings.hour) / 0.42, 2));
+            return energy * mood;
+        }
+
+        function wantedCounts() {
+            const has = role => stems.some(s => s.role === role);
+            const beds = has('bed') ? 1 : 0;
+            const rhythm = has('rhythm') && settings.kindling > 0.4 ? 1 : 0;
+            const layers = 2 + Math.round(settings.kindling * 4);
+            return { bed: beds, rhythm, tune: Math.max(1, layers - beds - rhythm) };
+        }
+
+        function pickWeighted(list, weightOf) {
+            const weights = list.map(weightOf);
+            let r = Math.random() * weights.reduce((a, b) => a + b, 0);
+            return list.find((_, i) => (r -= weights[i]) <= 0) || list[list.length - 1];
+        }
+
+        function evaluate(n, at, phrase) {
+            const live = voices.filter(v => !v.leaving);
+            const used = new Set(live.map(v => v.stem.instrument));
+            const counts = wantedCounts();
+            const w = settings.wander;
+            const loopTurn = n % index.bars === 0 ? 1.4 : 1;
+            const chance = { tune: 0.1 + 0.55 * w, bed: 0.03 + 0.15 * w, rhythm: 0.05 + 0.2 * w };
+            let changed = false;
+
+            for (const role of ['bed', 'rhythm', 'tune']) {
+                const mine = live.filter(v => v.stem.role === role);
+                const candidates = stems.filter(s => s.role === role && !used.has(s.instrument) && bufferFor(s, clock.bpm));
+                const fresh = s => Math.pow(score(s), 2) * (n - s.lastHeard < 8 ? 0.35 : 1) + 1e-6;
+                const worst = () => mine.reduce((a, b) => score(a.stem) <= score(b.stem) ? a : b);
+
+                if (mine.length > counts[role]) {
+                    leave(worst(), at);
+                    changed = true;
+                } else if (mine.length < counts[role] && candidates.length) {
+                    const stem = pickWeighted(candidates, fresh);
+                    join(stem, n, at);
+                    used.add(stem.instrument);
+                    changed = true;
+                } else if (mine.length && candidates.length) {
+                    const out = worst();
+                    const best = candidates.reduce((a, b) => score(a) >= score(b) ? a : b);
+                    // Something fits the sliders much better, or it's simply time for a change. A
+                    // change of heart only picks from what fits about as well as what it replaces,
+                    // so the two never fight (one swapping in a poor fit, the other swapping it back).
+                    const misfit = score(out.stem) < score(best) * 0.45;
+                    const restless = !misfit && phrase && Math.random() < chance[role] * loopTurn;
+                    const going = misfit ? out : pickWeighted(mine, v => 1.2 - score(v.stem));
+                    const fitting = candidates.filter(s => score(s) >= score(going.stem) * 0.55);
+                    if (misfit || (restless && fitting.length)) {
+                        const stem = misfit ? best : pickWeighted(fitting, fresh);
+                        leave(going, at);
+                        join(stem, n, at);
+                        used.add(stem.instrument);
+                        changed = true;
+                    }
+                }
+            }
+            if (changed) renderNow();
+            return changed;
+        }
+
+        function fadeBars(role, entering) {
+            if (role === 'rhythm') return entering ? 1 : 2;
+            if (role === 'bed') return 4;
+            return entering ? 2 + 2 * (1 - settings.wander) : 3;
+        }
+
+        function join(stem, n, at, fadeSeconds) {
+            const layer = ctx.createGain();
+            const trim = ctx.createGain();
+            trim.gain.value = Math.pow(10, stem.gain / 20);
+            layer.connect(trim).connect(mix);
+            const fade = fadeSeconds ?? fadeBars(stem.role, true) * clock.barTime;
+            const voice = { stem, layer, sources: [], leaving: false, envelope: { t0: at, v0: 0, t1: at + fade, v1: 1 } };
+            layer.gain.setValueAtTime(0, at);
+            layer.gain.linearRampToValueAtTime(1, at + fade);
+            startSource(voice, n, at, 0);
+            voices.push(voice);
+            stem.lastHeard = n;
+        }
+
+        function leave(voice, at) {
+            const fade = fadeBars(voice.stem.role, false) * clock.barTime;
+            const from = levelAt(voice, at);
+            voice.leaving = true;
+            voice.envelope = { t0: at, v0: from, t1: at + fade, v1: 0 };
+            voice.layer.gain.cancelScheduledValues(at);
+            voice.layer.gain.setValueAtTime(from, at);
+            voice.layer.gain.linearRampToValueAtTime(0, at + fade);
+            voice.endsAt = at + fade + 0.1;
+            voice.sources.forEach(s => s.source.stop(voice.endsAt));
+            voice.stem.lastHeard = nextBar + fadeBars(voice.stem.role, false);
+            setTimeout(() => {
+                voices = voices.filter(v => v !== voice);
+                voice.layer.disconnect();
+            }, (at + fade + 0.3 - ctx.currentTime) * 1000);
+        }
+
+        function levelAt(voice, t) {
+            const { t0, v0, t1, v1 } = voice.envelope;
+            if (t <= t0) return v0;
+            if (t >= t1) return v1;
+            return v0 + (v1 - v0) * (t - t0) / (t1 - t0);
+        }
+
+        // A stem's loop, started at bar n so it lines up with everything else
+        function startSource(voice, n, at, crossfade) {
+            const buffer = bufferFor(voice.stem, clock.bpm);
+            const source = ctx.createBufferSource();
+            source.buffer = buffer;
+            source.loop = true;
+            const gain = ctx.createGain();
+            source.connect(gain).connect(voice.layer);
+            const offset = ((n % index.bars) * clock.barTime) % buffer.duration;
+            if (crossfade) {
+                gain.gain.setValueAtTime(0, at);
+                gain.gain.linearRampToValueAtTime(1, at + crossfade);
+            }
+            source.start(at, offset);
+            if (voice.endsAt) source.stop(voice.endsAt);
+            voice.sources.push({ source, gain });
+        }
+
+        // New tempo: every voice switches to its re-timed loop on the same bar line
+        function changeTempo(n, at, bpm) {
+            clock = { start: at, bar: n, barTime: loopSeconds(bpm) / index.bars, bpm };
+            const swap = 0.06;
+            voices.forEach(voice => {
+                const old = voice.sources.splice(0);
+                old.forEach(({ source, gain }) => {
+                    gain.gain.setValueAtTime(1, at);
+                    gain.gain.linearRampToValueAtTime(0, at + swap);
+                    source.stop(at + swap + 0.05);
+                });
+                startSource(voice, n, at, swap);
+            });
+        }
+
+        function onBar(n, at) {
+            // Only when every voice (fading ones too) has its re-timed loop, so nothing falls out of step
+            if (readyBpm !== null && readyBpm !== clock.bpm && voices.every(v => bufferFor(v.stem, readyBpm))) {
+                changeTempo(n, at, readyBpm);
+            }
+            const phrase = n % PHRASE === 0;
+            if (unsettled || phrase) {
+                const changed = evaluate(n, at, phrase);
+                if (unsettled && !changed) unsettled = false;
+            }
+        }
+
+        function tick() {
+            const ahead = ctx.currentTime + 0.3;
+            while (barStart(nextBar) < ahead) {
+                onBar(nextBar, barStart(nextBar));
+                nextBar++;
+            }
+        }
+
+        // ---- Play ----
+
+        let wakeLock = null;
+
+        async function togglePlay() {
+            if (!stems.length) return;
+            if (navigator.audioSession) {
+                try { navigator.audioSession.type = 'playback'; } catch (e) {}
+            }
+            playing = !playing;
+            if (playing) {
+                await ctx.resume();
+                const start = ctx.currentTime + 0.15;
+                const bpm = stems.every(s => bufferFor(s, readyBpm ?? index.bpm)) ? (readyBpm ?? index.bpm) : index.bpm;
+                clock = { start, bar: 0, barTime: loopSeconds(bpm) / index.bars, bpm };
+                nextBar = 0;
+                voices = [];
+                // Open with a bed and one tune at once; the rest arrive a bar at a time
+                const counts = wantedCounts();
+                const opening = ['bed', 'tune'].map(role => stems.filter(s => s.role === role)).filter(list => list.length);
+                opening.forEach(list => join(pickWeighted(list, s => Math.pow(score(s), 2) + 1e-6), 0, start, 0.01));
+                if (!counts.bed && !opening.length) join(stems[0], 0, start, 0.01);
+                nextBar = 1;
+                unsettled = true;
+                master.gain.cancelScheduledValues(ctx.currentTime);
+                master.gain.setValueAtTime(master.gain.value, ctx.currentTime);
+                master.gain.linearRampToValueAtTime(0.9, start + 2.5);
+                ticker = setInterval(tick, 60);
+                requestWakeLock();
+                renderNow();
+            } else {
+                const t = ctx.currentTime;
+                clearInterval(ticker);
+                master.gain.cancelScheduledValues(t);
+                master.gain.setValueAtTime(master.gain.value, t);
+                master.gain.linearRampToValueAtTime(0, t + 1.2);
+                const stopping = voices;
+                voices = [];
+                setTimeout(() => {
+                    stopping.forEach(v => v.sources.forEach(s => { try { s.source.stop(); } catch (e) {} }));
+                    if (!playing) ctx.suspend();
+                }, 1400);
+                releaseWakeLock();
+                renderNow();
+            }
+            renderPlayer();
+        }
+
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+            } catch (e) {}
+        }
+
+        function releaseWakeLock() {
+            if (wakeLock) wakeLock.release();
+            wakeLock = null;
+        }
+
+        document.addEventListener('visibilitychange', () => {
+            if (playing && document.visibilityState === 'visible') requestWakeLock();
+        });
+
+        // ---- Controls ----
+
+        function setSetting(name, value) {
+            settings[name] = value;
+            saveSettings();
+            unsettled = true;
+            if (name === 'gait') requestTempo();
+            if (name === 'hour') applyShade(false);
+        }
+
+        // ---- Picture ----
+        // Each layer is a soft blot of color: the bed pools in the middle, tunes drift around it,
+        // and the rhythm sits further out and swells on the beat. Dusk tints it blue, dawn gold.
+
+        const PALETTE = ['#a0522d', '#b07d2a', '#3e5f8a', '#7b4b6a', '#2f6f6b', '#6b7a3a', '#94404f', '#586878', '#34466e'];
+
+        function hash(text) {
+            let h = 0;
+            for (const c of text) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+            return h;
+        }
+
+        function colorFor(instrument) {
+            return PALETTE[hash(instrument) % PALETTE.length];
+        }
+
+        function mixColor(a, b, t) {
+            const pa = a.match(/\w\w/g).map(x => parseInt(x, 16));
+            const pb = b.match(/\w\w/g).map(x => parseInt(x, 16));
+            return `rgb(${pa.map((v, i) => Math.round(v + (pb[i] - v) * t)).join(',')})`;
+        }
+
+        const canvas = document.getElementById('canvas');
+        const paint = canvas.getContext('2d');
+
+        function draw() {
+            const size = canvas.clientWidth;
+            const scale = window.devicePixelRatio || 1;
+            if (canvas.width !== Math.round(size * scale)) {
+                canvas.width = canvas.height = Math.round(size * scale);
+            }
+            const R = canvas.width / 2;
+            const now = ctx ? ctx.currentTime : 0;
+            const wall = performance.now() / 1000;
+
+            paint.globalCompositeOperation = 'source-over';
+            const sky = paint.createRadialGradient(R, R, 0, R, R, R);
+            sky.addColorStop(0, '#fffdf7');
+            sky.addColorStop(1, mixColor('#d3d8ea', '#f3e2bd', settings.hour));
+            paint.fillStyle = sky;
+            paint.fillRect(0, 0, canvas.width, canvas.height);
+
+            paint.globalCompositeOperation = 'multiply';
+            const beatTime = clock ? clock.barTime / index.beatsPerBar : 1;
+            const beat = clock && playing ? ((now - clock.start) / beatTime % 1 + 1) % 1 : 0.5;
+            const shown = playing ? voices : [];
+            shown.forEach(voice => {
+                const level = levelAt(voice, now);
+                if (level <= 0.001) return;
+                const stem = voice.stem;
+                let x = R;
+                let y = R;
+                let radius;
+                if (stem.role === 'bed') {
+                    radius = R * (0.62 + 0.04 * Math.sin(wall * 0.3));
+                } else if (stem.role === 'rhythm') {
+                    const a = stem.angle + wall * 0.05;
+                    x += Math.cos(a) * R * 0.5;
+                    y += Math.sin(a) * R * 0.5;
+                    radius = R * (0.2 + 0.07 * Math.exp(-beat * 5));
+                } else {
+                    const a = stem.angle + wall * (0.07 + stem.energyAt * 0.08);
+                    const orbit = R * (0.28 + 0.12 * Math.sin(wall * 0.11 + stem.angle));
+                    x += Math.cos(a) * orbit;
+                    y += Math.sin(a) * orbit;
+                    radius = R * (0.3 + 0.05 * Math.sin(wall * 0.4 + stem.angle * 3));
+                }
+                const blot = paint.createRadialGradient(x, y, 0, x, y, radius);
+                const alpha = Math.round(level * (stem.role === 'bed' ? 120 : 215)).toString(16).padStart(2, '0');
+                blot.addColorStop(0, stem.color + alpha);
+                blot.addColorStop(1, stem.color + '00');
+                paint.fillStyle = blot;
+                paint.beginPath();
+                paint.arc(x, y, radius, 0, Math.PI * 2);
+                paint.fill();
+            });
+            requestAnimationFrame(draw);
+        }
+
+        // ---- Display ----
+
+        function setText(id, text) {
+            document.getElementById(id).textContent = text;
+        }
+
+        const PLAY_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6a.8.8 0 0 0 1.2.7l10.6-6.8a.8.8 0 0 0 0-1.4L9.2 4.5A.8.8 0 0 0 8 5.2z"/></svg>';
+        const PAUSE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4.2" height="14" rx="1"/><rect x="13.8" y="5" width="4.2" height="14" rx="1"/></svg>';
+
+        function renderPlayer() {
+            document.getElementById('player').classList.toggle('playing', playing);
+            document.getElementById('playBtn').innerHTML = playing ? PAUSE_ICON : PLAY_ICON;
+            document.getElementById('playBtn').setAttribute('aria-label', playing ? 'Pause' : 'Play');
+            if (stems.length) setText('playLabel', playing ? 'tap to pause' : 'tap to play');
+        }
+
+        // What's playing, quietly: bed first, then the rest
+        function renderNow() {
+            const order = { bed: 0, rhythm: 1, tune: 2 };
+            const names = playing ? voices.filter(v => !v.leaving).sort((a, b) => order[a.stem.role] - order[b.stem.role]).map(v => v.stem.instrument) : [];
+            setText('now', names.join(' · '));
+        }
+
+        function render() {
+            ['kindling', 'hour', 'gait', 'wander'].forEach(name => {
+                document.getElementById(name).value = Math.round((settings[name] ?? 0.5) * 1000);
+            });
+        }
+
+        // Skipped on localhost so local edits show up right away
+        if ('serviceWorker' in navigator && location.hostname !== 'localhost') {
+            navigator.serviceWorker.register('sw.js');
+        }
+
+        render();
+        renderPlayer();
+        requestAnimationFrame(draw);
+        loadAll().catch(err => {
+            console.error(err);
+            setText('playLabel', "couldn't gather the loops");
+        });
+    </script>
+</body>
+</html>

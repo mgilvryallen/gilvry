@@ -1,0 +1,9 @@
+{
+  "bars": 16,
+  "beatsPerBar": 4,
+  "tempoRange": [150, 175],
+  "moods": ["dusky", "misty", "calm", "warm", "bright"],
+  "beds": ["drone", "pad"],
+  "rhythm": ["perc", "drums", "shaker", "bodhran", "bones", "spoons"],
+  "targetLufs": -20
+}
