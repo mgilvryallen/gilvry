@@ -1,10 +1,10 @@
-# ilvry
+# Little Guy
 
 Loops and a drone that layer and wander on their own. Press play and it builds: the hum of a
 shruti box underneath, a sub, a groove, little plucks and blips coming and going over it. Four
 sliders steer it, loosely.
 
-**Use it:** https://mgilvryallen.github.io/ilvry/
+**Use it:** https://mgilvryallen.github.io/littleguy/
 
 - **Kindling** (embers to bonfire): how much is going on. More layers, livelier ones, drums
   and then hats as it rises, and it changes its mind more often.
@@ -36,7 +36,7 @@ MP3s, and publishes the app. A minute or two later the new loops are live. If a 
 problem, it's skipped and named in that run's summary.
 
 The tempo comes from the loops themselves: 16 bars of 4/4 in however long they last. Loops made
-in the middle of the range (around 85 to 90 bpm) stretch best both ways. `ilvry.json` has the
+in the middle of the range (around 85 to 90 bpm) stretch best both ways. `littleguy.json` has the
 bar count, tempo range, moods, which instruments count as beds, lows and rhythm, and the key
 the drone plays in.
 

@@ -1,4 +1,4 @@
-"""Placeholder loops for ilvry, so the app has something to play before real stems arrive.
+"""Placeholder loops for Little Guy, so the app has something to play before real stems arrive.
 
 Every loop is 16 bars of 4/4 at 90 bpm in D, on one shared chord progression, rendered so
 anything ringing past the end wraps around to the start (seamless). Blips, plucks, arpeggios,

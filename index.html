@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>ilvry</title>
+    <title>Little Guy</title>
     <meta name="description" content="Loops and a drone that layer and wander on their own, steered by a few mysterious sliders.">
     <meta name="theme-color" content="#f7f3e9">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="ilvry">
+    <meta name="apple-mobile-web-app-title" content="Little Guy">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
@@ -253,7 +253,7 @@
     <div class="container">
         <header>
             <img src="icons/icon.svg" alt="">
-            <h1>ilvry</h1>
+            <h1>Little Guy</h1>
         </header>
 
         <div class="card player" id="player" style="--accent: var(--rust)">
@@ -289,12 +289,12 @@
         </div>
 
         <div class="credit">
-            Made by <a href="https://mgilvryallen.com" target="_blank">M'Gilvry Allen</a><br><a href="https://github.com/mgilvryallen/ilvry" target="_blank">make your own copy</a>
+            Made by <a href="https://mgilvryallen.com" target="_blank">M'Gilvry Allen</a><br><a href="https://github.com/mgilvryallen/littleguy" target="_blank">make your own copy</a>
         </div>
     </div>
 
     <script>
-        const SETTINGS_KEY = 'ilvrySettings';
+        const SETTINGS_KEY = 'littleguySettings';
         const DEFAULTS = { kindling: 0.35, hour: 0.5, gait: null, hum: 0.65 };
         const PHRASE = 4; // bars between the engine's chances to change its mind
 
@@ -408,7 +408,7 @@
             if (!('caches' in window)) return;
             const current = new Set(index.stems.map(s => s.file));
             for (const key of await caches.keys()) {
-                if (!key.startsWith('ilvry-')) continue;
+                if (!key.startsWith('littleguy-')) continue;
                 const cache = await caches.open(key);
                 for (const request of await cache.keys()) {
                     const file = decodeURIComponent(request.url.split('/loops/')[1] || '');
@@ -715,14 +715,14 @@
 
         // ---- The hum: Drone, inside ----
         // This is Drone's own sound engine (github.com/mgilvryallen/drone), copied in unchanged but
-        // for where its sound goes, how loud, and how slowly its voices change level when ilvry
+        // for where its sound goes, how loud, and how slowly its voices change level when Little Guy
         // asks: three reeds per voice, buzz, bellows, blooms, the undertow, air, and Mingle's
         // strays and glides. It runs as Front Porch. Hum decides how many of Front Porch's voices
         // it can use; Hour moves its tone, Kindling its Mingle; and on its own it lets voices
         // swell, fade, drop out and come back.
         function makeDrone(context, output, key, octave) {
             let level = 0;
-            let fade = null; // when ilvry sets it: how slowly voices move to new levels (seconds)
+            let fade = null; // when Little Guy sets it: how slowly voices move to new levels (seconds)
             const settings = {
                 key, octave, cents: 0, mingle: 50, tone: 45, breath: 50,
                 voices: {}, levels: {}
